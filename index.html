@@ -888,7 +888,10 @@ async function apiGet(ep, params = {}) {
   const mes = document.getElementById('g-mes')?.value || '';
   const emp = document.getElementById('g-emp')?.value || '';
   // Só injeta filtro se tiver valor (string não vazia)
-  if (mes && mes !== '' && !params.mes) params.mes = mes;
+  if (mes && mes !== '' && !params.mes) {
+    const mesP = mes.split('/');
+    params.mes = mesP[0].padStart(2,'0') + '/' + (mesP[1] || '');
+  }
   if (emp && emp !== '' && !params.empresa) params.empresa = emp;
   // Nunca envia parâmetro vazio — evita filtro acidental
   Object.entries(params).forEach(([k, v]) => {
@@ -982,7 +985,13 @@ function buildBarChart(meses, containerEl, keys, colors) {
   if (!meses || meses.length === 0) { containerEl.innerHTML = '<div class="empty-state"><p>Sem dados</p></div>'; return; }
   const totals = meses.map(m => keys.reduce((s, k) => s + (parseFloat(m[k.key])||0), 0));
   const maxV   = Math.max(...totals, 1);
-  containerEl.innerHTML = meses.map(m => {
+  // Ordenar meses antes de renderizar
+  const mesesOrdenados = [...meses].sort((a, b) => {
+    const [ma, ya] = (a.mes||'00/0000').split('/');
+    const [mb, yb] = (b.mes||'00/0000').split('/');
+    return (+ya * 100 + +ma) - (+yb * 100 + +mb);
+  });
+  containerEl.innerHTML = mesesOrdenados.map(m => {
     const total = keys.reduce((s, k) => s + (parseFloat(m[k.key])||0), 0);
     const h     = Math.max(2, Math.round((total / maxV) * 118));
     const segs  = keys.map(k => {
@@ -990,9 +999,13 @@ function buildBarChart(meses, containerEl, keys, colors) {
       const sh  = total > 0 ? Math.round((val / maxV) * 118) : 0;
       return `<div class="bar-seg ${k.cls}" style="height:${sh}px" title="${k.label}: ${BRL(val)}"></div>`;
     }).join('');
+    // Label curto: "Mar/25"
+    const parts = String(m.mes||'').split('/');
+    const meses3 = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const lbl = parts.length === 2 ? (meses3[+parts[0]-1]||parts[0]) + '/' + parts[1].slice(-2) : m.mes||'';
     return `<div class="bar-col">
       <div class="bar-stack" style="height:${h}px">${segs}</div>
-      <div class="bar-lbl">${String(m.mes||'').slice(0,6)}</div>
+      <div class="bar-lbl">${lbl}</div>
     </div>`;
   }).join('');
 }
@@ -1016,7 +1029,7 @@ function populateMeses() {
   const opts = ['<option value="">Todo o período</option>'];
   // Gera de 2024 a ano atual+1
   const anoAtual = new Date().getFullYear();
-  for (let y = 2024; y <= anoAtual + 1; y++)
+  for (let y = 2025; y <= anoAtual + 1; y++)
     for (let m = 1; m <= 12; m++)
       opts.push(`<option value="${String(m).padStart(2,'0')}/${y}">${String(m).padStart(2,'0')}/${y}</option>`);
   sel.innerHTML = opts.join('');
@@ -1116,7 +1129,11 @@ async function loadDashboard() {
       <div class="sum-item"><div class="sum-label">Vasilhames Pendentes</div><div class="sum-val">${NUM(d.vasilhames_pendentes)}</div><div class="sum-sub">barris em campo</div></div>`;
 
     // KPIs com sparkline por mês
-    const meses = d.receita_por_mes || [];
+    const meses = (d.receita_por_mes || []).sort((a, b) => {
+      const [ma, ya] = (a.mes||'00/0000').split('/');
+      const [mb, yb] = (b.mes||'00/0000').split('/');
+      return (+ya * 100 + +ma) - (+yb * 100 + +mb);
+    });
     const vals  = meses.map(m => m.valor);
     const mesAtual  = meses.slice(-1)[0]?.valor || 0;
     const mesAnterior = meses.slice(-2, -1)[0]?.valor || 0;
@@ -1176,10 +1193,10 @@ async function loadDashboard() {
     document.getElementById('top-cli-tbody').innerHTML = (d.top_clientes||[]).map((c,i) => `<tr>
       <td class="td-c mono" style="color:var(--ink3);font-size:11px">${i+1}</td>
       <td class="td-b">${c.cliente||'—'}</td>
-      <td>${tagOp(c.origem)}</td>
+      <td>${tagOp(c.empresa||c.origem)}</td>
       <td class="td-r td-g">${BRL(c.receita)}</td>
       <td class="td-r">${c.pedidos||0}</td>
-      <td>${tagSeg(c.segmento)}</td>
+      <td>${c.segmento && c.segmento !== 'undefined' ? tagSeg(c.segmento) : '<span class="tag tag-k">—</span>'}</td>
     </tr>`).join('') || emptyRow(6);
 
     // Top products
@@ -1313,14 +1330,21 @@ async function loadVendas() {
     // Meses derivados do histórico client-side (evita 3a chamada)
     const recMesMap = {};
     hist.forEach(h => {
-      const m = h.mes || ''; if (!m) return;
+      let m = '';
+      if (h.data) {
+        const parts = String(h.data).split('/');
+        if (parts.length === 3) m = parts[1].padStart(2,'0') + '/' + parts[2];
+      }
+      if (!m) m = h.mes || '';
+      if (!m) return;
       if (!recMesMap[m]) recMesMap[m] = { mes: m, master: 0, wine: 0, pdv: 0, valor: 0 };
       const val = parseFloat(h.valor_total)||0;
-      const orig = String(h.origem||h.empresa||'').toLowerCase();
+      const emp = String(h.empresa||h.origem||'').toLowerCase();
       recMesMap[m].valor += val;
-      if (orig.includes('master')) recMesMap[m].master += val;
-      else if (orig.includes('wine')) recMesMap[m].wine += val;
-      else if (orig.includes('pdv')) recMesMap[m].pdv += val;
+      if (emp.includes('master'))    recMesMap[m].master += val;
+      else if (emp.includes('wine')) recMesMap[m].wine   += val;
+      else if (emp.includes('pdv'))  recMesMap[m].pdv    += val;
+      else recMesMap[m].master += val;
     });
     const meses = Object.values(recMesMap).sort((a,b) => a.mes.localeCompare(b.mes));
     const totR  = prods.reduce((s,p) => s+(parseFloat(p.receita)||0), 0);
