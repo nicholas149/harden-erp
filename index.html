@@ -676,6 +676,10 @@ input[type=date], input[type=time] { color-scheme: light; }
         <button class="btn btn-primary" onclick="salvarCfg()">✓ Salvar</button>
       </div>
       <div id="cfg-res" style="margin-top:12px;font-size:12px;color:var(--ink3)"></div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--bd)">
+        <button class="btn btn-ghost btn-sm" onclick="rodarDiagnostico()">🔍 Diagnosticar conexão e abas</button>
+      </div>
+      <div id="diag-res" style="margin-top:10px;font-size:11px;color:var(--ink3);font-family:'IBM Plex Mono',monospace;white-space:pre-wrap;background:var(--bg);padding:10px;border-radius:6px;display:none"></div>
     </div>
     <div class="card">
       <div class="card-hdr"><div class="card-title">Abas da planilha</div></div>
@@ -1008,7 +1012,8 @@ function populateMeses() {
     for (let m = 1; m <= 12; m++)
       opts.push(`<option value="${String(m).padStart(2,'0')}/${y}">${String(m).padStart(2,'0')}/${y}</option>`);
   sel.innerHTML = opts.join('');
-  sel.value = mAtual();
+  // Padrão: "Todo o período" para mostrar histórico completo
+  sel.value = '';
 }
 
 async function loadSkuCache() {
@@ -1178,7 +1183,11 @@ async function loadDashboard() {
     document.getElementById('dash-body').style.display = 'block';
   } catch(e) {
     setConn(false);
-    document.getElementById('dash-loading').innerHTML = `<div class="empty-state"><div class="es-icon">⚠</div><p style="color:var(--r)">Erro ao conectar. Configure a URL do Apps Script em <strong>Configurações</strong>.</p></div>`;
+    document.getElementById('dash-loading').innerHTML = `<div class="empty-state"><div class="es-icon">⚠</div>
+      <p style="color:var(--r);margin-bottom:8px"><strong>Erro ao conectar ao Sheets</strong></p>
+      <p style="font-size:11px;color:var(--ink3);margin-bottom:8px">${e.message||e}</p>
+      <p style="font-size:11px;color:var(--ink3)">Verifique: 1) URL do Apps Script em Configurações está correta e termina em /exec<br>2) A implantação está como "Qualquer pessoa"<br>3) Você executou inicializarTudo() no Apps Script</p>
+    </div>`;
   }
 }
 
@@ -1826,6 +1835,38 @@ async function submitLancamento() {
 // ══════════════════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════════════════
+async function rodarDiagnostico() {
+  const el = document.getElementById('diag-res');
+  el.style.display = 'block';
+  el.textContent = 'Rodando diagnóstico...';
+  try {
+    const r = await apiGet('diagnostico', {});
+    if (!r.ok) throw new Error(r.erro || 'Falha');
+    const d = r.dados;
+    let txt = '';
+    Object.entries(d).forEach(([nome, info]) => {
+      const ok = info.existe;
+      txt += (ok ? '✓' : '✗') + ' ' + nome;
+      if (ok) {
+        txt += '\n  linhas: ' + (info.linhas - 1);
+        if (info.headers?.length > 0) txt += '\n  headers: ' + info.headers.slice(0,5).join(', ') + (info.headers.length > 5 ? '...' : '');
+        if (info.amostra?.length > 0 && info.amostra[0]?.length > 0) {
+          txt += '\n  1a linha: ' + info.amostra[0].slice(0,4).join(' | ');
+        }
+      } else {
+        txt += ' — NÃO EXISTE';
+        if (info.erro) txt += '\n  erro: ' + info.erro;
+      }
+      txt += '\n\n';
+    });
+    el.style.color = 'var(--ink2)';
+    el.textContent = txt;
+  } catch(e) {
+    el.style.color = 'var(--r)';
+    el.textContent = 'Erro: ' + (e.message || e);
+  }
+}
+
 async function testarConn() {
   const url=document.getElementById('cfg-url').value.trim();
   if (!url) { document.getElementById('cfg-res').textContent='Cole a URL do Apps Script'; return; }
