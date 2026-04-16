@@ -887,9 +887,13 @@ async function apiGet(ep, params = {}) {
   u.searchParams.set('endpoint', ep);
   const mes = document.getElementById('g-mes')?.value || '';
   const emp = document.getElementById('g-emp')?.value || '';
-  if (mes && !params.mes) params.mes = mes;
-  if (emp && !params.empresa) params.empresa = emp;
-  Object.entries(params).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') u.searchParams.set(k, v); });
+  // Só injeta filtro se tiver valor (string não vazia)
+  if (mes && mes !== '' && !params.mes) params.mes = mes;
+  if (emp && emp !== '' && !params.empresa) params.empresa = emp;
+  // Nunca envia parâmetro vazio — evita filtro acidental
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== null && v !== undefined && v !== '') u.searchParams.set(k, String(v));
+  });
   const r = await fetch(u.toString());
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
@@ -940,11 +944,13 @@ function closeM(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
 
 function tagOp(o = '') {
-  const s = String(o);
-  if (s.includes('Master') || s.includes('master')) return `<span class="tag tag-b">${s}</span>`;
-  if (s.includes('Wine')   || s.includes('wine'))   return `<span class="tag tag-p">${s}</span>`;
-  if (s.includes('PDV')    || s.includes('pdv'))    return `<span class="tag tag-a">${s}</span>`;
-  return `<span class="tag tag-k">${s}</span>`;
+  const s = String(o || '').trim();
+  const sl = s.toLowerCase();
+  if (sl.includes('master')) return `<span class="tag tag-b">Master</span>`;
+  if (sl.includes('wine') || sl.includes('winechopp')) return `<span class="tag tag-p">Winechopp</span>`;
+  if (sl.includes('pdv')) return `<span class="tag tag-a">PDV</span>`;
+  if (s) return `<span class="tag tag-k">${s}</span>`;
+  return '';
 }
 function tagSeg(s) {
   const m = { 'Campeão':'tag-g','Fiel':'tag-b','Novo':'tag-p','Regular':'tag-a','Em risco':'tag-r' };
@@ -1008,12 +1014,13 @@ function populateMeses() {
   const sel = document.getElementById('g-mes');
   if (!sel) return;
   const opts = ['<option value="">Todo o período</option>'];
-  for (let y = 2025; y <= 2026; y++)
+  // Gera de 2024 a ano atual+1
+  const anoAtual = new Date().getFullYear();
+  for (let y = 2024; y <= anoAtual + 1; y++)
     for (let m = 1; m <= 12; m++)
       opts.push(`<option value="${String(m).padStart(2,'0')}/${y}">${String(m).padStart(2,'0')}/${y}</option>`);
   sel.innerHTML = opts.join('');
-  // Padrão: "Todo o período" para mostrar histórico completo
-  sel.value = '';
+  sel.value = ''; // Padrão: todo o período
 }
 
 async function loadSkuCache() {
@@ -1065,6 +1072,12 @@ function goto(p) {
   if (meta.load) meta.load();
 }
 
+function limparFiltros() {
+  document.getElementById('g-mes').value = '';
+  document.getElementById('g-emp').value = '';
+  reloadPage();
+}
+
 function reloadPage() {
   const active = document.querySelector('.nav-btn.active');
   if (active) {
@@ -1079,10 +1092,14 @@ function reloadPage() {
 // ══════════════════════════════════════════════════════════════
 async function loadDashboard() {
   document.getElementById('dash-loading').style.display = 'flex';
+  document.getElementById('dash-loading').innerHTML = '<div class="spin"></div> Buscando dados...';
   document.getElementById('dash-body').style.display = 'none';
   try {
+    // Uma única chamada — Apps Script processa tudo server-side
     const r = await apiGet('dashboard');
+    if (!r.ok) throw new Error(r.erro || 'Resposta inválida do servidor');
     const d = r.dados;
+    if (!d) throw new Error('Sem dados retornados');
     DASH_CACHE = d;
     setConn(true);
 
@@ -1287,12 +1304,25 @@ async function loadDRE() {
 async function loadVendas() {
   const q = document.getElementById('vd-busca')?.value || '';
   try {
-    const [pR, hR, mR] = await Promise.all([
+    // 2 chamadas: produtos agregados + histórico
+    const [pR, hR] = await Promise.all([
       apiGet('vendas_produto'),
-      apiGet('vendas', { cliente: q, limit: 100 }),
-      apiGet('vendas_mes'),
+      apiGet('vendas', { cliente: q, limit: 150 }),
     ]);
-    const prods = pR.dados || [], hist = hR.dados || [], meses = mR.dados || [];
+    const prods = pR.dados || [], hist = hR.dados || [];
+    // Meses derivados do histórico client-side (evita 3a chamada)
+    const recMesMap = {};
+    hist.forEach(h => {
+      const m = h.mes || ''; if (!m) return;
+      if (!recMesMap[m]) recMesMap[m] = { mes: m, master: 0, wine: 0, pdv: 0, valor: 0 };
+      const val = parseFloat(h.valor_total)||0;
+      const orig = String(h.origem||h.empresa||'').toLowerCase();
+      recMesMap[m].valor += val;
+      if (orig.includes('master')) recMesMap[m].master += val;
+      else if (orig.includes('wine')) recMesMap[m].wine += val;
+      else if (orig.includes('pdv')) recMesMap[m].pdv += val;
+    });
+    const meses = Object.values(recMesMap).sort((a,b) => a.mes.localeCompare(b.mes));
     const totR  = prods.reduce((s,p) => s+(parseFloat(p.receita)||0), 0);
     const totL  = prods.reduce((s,p) => s+(parseFloat(p.litros)||0), 0);
     const totB  = prods.reduce((s,p) => s+(parseFloat(p.barris)||0), 0);
