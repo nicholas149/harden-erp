@@ -956,6 +956,7 @@ function tagOp(o = '') {
   return '';
 }
 function tagSeg(s) {
+  if (!s || s === 'undefined') return '<span class="tag tag-k">—</span>';
   const m = { 'Campeão':'tag-g','Fiel':'tag-b','Novo':'tag-p','Regular':'tag-a','Em risco':'tag-r' };
   return `<span class="tag ${m[s]||'tag-k'}">${s}</span>`;
 }
@@ -986,11 +987,12 @@ function buildBarChart(meses, containerEl, keys, colors) {
   const totals = meses.map(m => keys.reduce((s, k) => s + (parseFloat(m[k.key])||0), 0));
   const maxV   = Math.max(...totals, 1);
   // Ordenar meses antes de renderizar
+  // Ordenar cronologicamente
   const mesesOrdenados = [...meses].sort((a, b) => {
-    const [ma, ya] = (a.mes||'00/0000').split('/');
-    const [mb, yb] = (b.mes||'00/0000').split('/');
-    return (+ya * 100 + +ma) - (+yb * 100 + +mb);
+    const pa = (a.mes||'00/0000').split('/'); const pb = (b.mes||'00/0000').split('/');
+    return (+pa[1]*100 + +pa[0]) - (+pb[1]*100 + +pb[0]);
   });
+  const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   containerEl.innerHTML = mesesOrdenados.map(m => {
     const total = keys.reduce((s, k) => s + (parseFloat(m[k.key])||0), 0);
     const h     = Math.max(2, Math.round((total / maxV) * 118));
@@ -999,10 +1001,8 @@ function buildBarChart(meses, containerEl, keys, colors) {
       const sh  = total > 0 ? Math.round((val / maxV) * 118) : 0;
       return `<div class="bar-seg ${k.cls}" style="height:${sh}px" title="${k.label}: ${BRL(val)}"></div>`;
     }).join('');
-    // Label curto: "Mar/25"
     const parts = String(m.mes||'').split('/');
-    const meses3 = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-    const lbl = parts.length === 2 ? (meses3[+parts[0]-1]||parts[0]) + '/' + parts[1].slice(-2) : m.mes||'';
+    const lbl   = parts.length === 2 ? (MESES_PT[+parts[0]-1]||parts[0]) + '/' + parts[1].slice(-2) : m.mes||'';
     return `<div class="bar-col">
       <div class="bar-stack" style="height:${h}px">${segs}</div>
       <div class="bar-lbl">${lbl}</div>
@@ -1100,6 +1100,17 @@ function reloadPage() {
   }
 }
 
+// Atualizar label do topbar com filtro ativo
+function updateTopbarLabel() {
+  const mes = document.getElementById('g-mes')?.value || '';
+  const emp = document.getElementById('g-emp')?.value || '';
+  const parts = mes.split('/');
+  const MESES_LABEL = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const mesLabel = mes ? (MESES_LABEL[+parts[0]-1]||parts[0]) + '/' + parts[1] : 'Todo o período';
+  const empLabel = emp || 'Todas as operações';
+  document.getElementById('tb-sub').textContent = mesLabel + ' · ' + empLabel;
+}
+
 // ══════════════════════════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════════════════════════
@@ -1130,9 +1141,8 @@ async function loadDashboard() {
 
     // KPIs com sparkline por mês
     const meses = (d.receita_por_mes || []).sort((a, b) => {
-      const [ma, ya] = (a.mes||'00/0000').split('/');
-      const [mb, yb] = (b.mes||'00/0000').split('/');
-      return (+ya * 100 + +ma) - (+yb * 100 + +mb);
+      const pa = (a.mes||'00/0000').split('/'); const pb = (b.mes||'00/0000').split('/');
+      return (+pa[1]*100 + +pa[0]) - (+pb[1]*100 + +pb[0]);
     });
     const vals  = meses.map(m => m.valor);
     const mesAtual  = meses.slice(-1)[0]?.valor || 0;
@@ -1330,23 +1340,27 @@ async function loadVendas() {
     // Meses derivados do histórico client-side (evita 3a chamada)
     const recMesMap = {};
     hist.forEach(h => {
+      // Derivar mes SEMPRE da data — campo mes pode estar incorreto
       let m = '';
       if (h.data) {
         const parts = String(h.data).split('/');
         if (parts.length === 3) m = parts[1].padStart(2,'0') + '/' + parts[2];
       }
-      if (!m) m = h.mes || '';
-      if (!m) return;
+      if (!m) return; // sem data, pula
       if (!recMesMap[m]) recMesMap[m] = { mes: m, master: 0, wine: 0, pdv: 0, valor: 0 };
       const val = parseFloat(h.valor_total)||0;
       const emp = String(h.empresa||h.origem||'').toLowerCase();
       recMesMap[m].valor += val;
-      if (emp.includes('master'))    recMesMap[m].master += val;
-      else if (emp.includes('wine')) recMesMap[m].wine   += val;
-      else if (emp.includes('pdv'))  recMesMap[m].pdv    += val;
+      if      (emp.includes('master')) recMesMap[m].master += val;
+      else if (emp.includes('wine'))   recMesMap[m].wine   += val;
+      else if (emp.includes('pdv'))    recMesMap[m].pdv    += val;
       else recMesMap[m].master += val;
     });
-    const meses = Object.values(recMesMap).sort((a,b) => a.mes.localeCompare(b.mes));
+    // Ordenar cronologicamente
+    const meses = Object.values(recMesMap).sort((a, b) => {
+      const pa = a.mes.split('/'); const pb = b.mes.split('/');
+      return (+pa[1]*100 + +pa[0]) - (+pb[1]*100 + +pb[0]);
+    });
     const totR  = prods.reduce((s,p) => s+(parseFloat(p.receita)||0), 0);
     const totL  = prods.reduce((s,p) => s+(parseFloat(p.litros)||0), 0);
     const totB  = prods.reduce((s,p) => s+(parseFloat(p.barris)||0), 0);
