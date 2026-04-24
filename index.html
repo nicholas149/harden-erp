@@ -182,16 +182,16 @@ async function carregarDados() {
     ]);
     CLIENTES = (rc.dados||[]).map(x=>({id:x.id, nome:x.nome_canonico, tipo:x.tipo||''}));
     PRODUTOS  = (rp.dados||[]).map(x=>({sku:x.sku, nome:x.nome_canonico, cat:x.categoria, ret:x.retornavel, tipo_ret:x.tipo_retorno, litros:x.litros_barril}));
-    // Veículos: extrair placas únicas dos abastecimentos ou usar lista fixa
-    VEICULOS = [
-      {placa:'ABC-1234', modelo:'VW Delivery 11.180', empresa:'Master'},
-      {placa:'DEF-5678', modelo:'VW Delivery 9.170',  empresa:'Master'},
-      {placa:'GHI-9012', modelo:'Fiat Ducato',         empresa:'Master'},
-      {placa:'JKL-3456', modelo:'Renault Master',      empresa:'Master'},
-      {placa:'MNO-7890', modelo:'Ford Cargo 816',      empresa:'Master'},
-      {placa:'PQR-1234', modelo:'Mercedes Sprinter',   empresa:'Winechopp'},
-      {placa:'STU-5678', modelo:'VW Delivery 6.160',   empresa:'Winechopp'},
-    ];
+    // Veículos: carregados da aba 🚗 Frota da planilha
+    const rv = await fetch(API+'?endpoint=frota').then(r=>r.json());
+    VEICULOS = (rv.dados||[])
+      .filter(v => String(v.ativo||'Sim').toLowerCase() !== 'não')
+      .map(v => ({
+        placa:   String(v.placa||'').toUpperCase(),
+        modelo:  v.modelo||'',
+        empresa: v.empresa||'Master',
+        motorista: v.motorista_fixo||'',
+      }));
   } catch(e) { console.log('Erro carregando dados:', e); }
 }
 carregarDados();
@@ -662,7 +662,6 @@ function formDefs(tipo) {
       <div class="fg"><label><span class="req">*</span> Veículo</label>
         <select id="vei-ab">
           <option value="">— Selecionar veículo —</option>
-          ${VEICULOS.map(v=>`<option value="${v.placa}">${v.placa} — ${v.modelo} (${v.empresa})</option>`).join('')}
         </select>
       </div>
       <div class="fg"><label><span class="req">*</span> Origem do diesel</label>
@@ -695,6 +694,12 @@ function formDefs(tipo) {
         <textarea id="obs-ab" placeholder="Ex: óleo verificado, pneu calibrado..."></textarea>
       </div>`,
     init: () => {
+      // Popular select de veículos da lista carregada da planilha
+      const sel = document.getElementById('vei-ab');
+      if (sel && VEICULOS.length) {
+        sel.innerHTML = '<option value="">— Selecionar veículo —</option>' +
+          VEICULOS.map(v=>`<option value="${v.placa}">${v.placa} — ${v.modelo} (${v.empresa})</option>`).join('');
+      }
       document.getElementById('mot-ab').value = NOME;
       updatePrecoCampo();
     },
