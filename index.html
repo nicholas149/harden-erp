@@ -3,1973 +3,1244 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Harden Express — ERP</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<title>Harden — Operações</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root {
-  --ink:    #0D1117; --ink2:   #3D4550; --ink3:   #8892A0;
-  --bg:     #F4F5F7; --bg2:    #FFFFFF; --bg3:    #ECEEF1;
-  --bd:     #E2E5EA; --bd2:    #C8CDD5;
-  --g:      #059669; --gd:     #047857; --gl:     #D1FAE5; --gm:     #34D399;
-  --b:      #2563EB; --bl:     #EFF6FF; --bm:     #93C5FD;
-  --p:      #7C3AED; --pl:     #F5F3FF; --pm:     #C4B5FD;
-  --a:      #D97706; --al:     #FFFBEB; --am:     #FCD34D;
-  --r:      #DC2626; --rl:     #FEF2F2; --rm:     #FCA5A5;
-  --o:      #EA580C; --ol:     #FFF7ED;
-  --sidebar-w: 220px;
-  --header-h:  52px;
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --g:#0F6E56;--g1:#0a5240;--g2:#E1F5EE;--g3:#A7F3D0;
+  --a:#D97706;--a2:#FEF3C7;--a3:#FDE68A;
+  --r:#DC2626;--r2:#FEE2E2;
+  --b:#185FA5;--b2:#EFF6FF;
+  --ink:#0D1B14;--ink2:#374151;--ink3:#6B7280;--ink4:#9CA3AF;
+  --bg:#F4F7F5;--bg2:#FFFFFF;--bd:#E5E7EB;--bd2:#D1D5DB;
+  --rad:14px;--rad2:10px;--rad3:8px;
+  --sh:0 1px 4px rgba(0,0,0,.07),0 4px 16px rgba(0,0,0,.06);
+  --sh2:0 2px 8px rgba(0,0,0,.1),0 8px 32px rgba(0,0,0,.08);
 }
+html{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font-size:15px;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+body{min-height:100dvh;display:flex;flex-direction:column}
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 14px; }
-body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); color: var(--ink); min-height: 100vh; overflow-x: hidden; }
-.mono { font-family: 'IBM Plex Mono', monospace; }
+/* ── Topbar ───────────────────────────────────────────── */
+.topbar{background:var(--g);color:#fff;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(15,110,86,.3)}
+.logo{font-weight:700;font-size:17px;letter-spacing:-.3px}
+.logo-sub{opacity:.55;font-weight:400;font-size:12px;margin-left:5px}
+.role-chip{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.22);border-radius:99px;padding:4px 11px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px}
+.role-chip:hover{background:rgba(255,255,255,.25)}
 
-/* ── LAYOUT ─────────────────────────────────────────────────── */
-.shell  { display: flex; min-height: 100vh; }
-.sidebar{ width: var(--sidebar-w); background: var(--ink); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; overflow-x: hidden; flex-shrink: 0; }
-.main   { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.topbar { height: var(--header-h); background: var(--bg2); border-bottom: 1px solid var(--bd); display: flex; align-items: center; padding: 0 24px; gap: 16px; position: sticky; top: 0; z-index: 50; }
-.content{ flex: 1; padding: 24px; overflow-x: hidden; }
+/* ── Screens ──────────────────────────────────────────── */
+.screen{display:none;flex:1;flex-direction:column;animation:fi .18s ease}
+.screen.active{display:flex}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 
-/* ── SIDEBAR ─────────────────────────────────────────────────── */
-.brand  { padding: 20px 16px 12px; border-bottom: 1px solid rgba(255,255,255,.08); }
-.brand-mark { display: flex; align-items: center; gap: 10px; }
-.brand-icon { width: 32px; height: 32px; background: var(--g); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500; color: #fff; flex-shrink: 0; letter-spacing: -0.5px; }
-.brand-name { font-size: 14px; font-weight: 700; color: #fff; line-height: 1.1; }
-.brand-sub  { font-size: 9px; color: rgba(255,255,255,.35); letter-spacing: 1.2px; text-transform: uppercase; margin-top: 1px; }
-.nav-sec { padding: 16px 12px 4px; font-size: 9px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: rgba(255,255,255,.3); }
-.nav-btn { display: flex; align-items: center; gap: 9px; padding: 7px 12px; border-radius: 6px; cursor: pointer; font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,.5); transition: .12s; margin: 1px 8px; border: none; background: none; width: calc(100% - 16px); text-align: left; }
-.nav-btn:hover  { background: rgba(255,255,255,.07); color: rgba(255,255,255,.85); }
-.nav-btn.active { background: rgba(5,150,105,.22); color: var(--gm); }
-.nav-ic { font-size: 13px; width: 16px; text-align: center; flex-shrink: 0; }
-.nav-pill{ margin-left: auto; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 10px; background: rgba(5,150,105,.25); color: var(--gm); }
-.nav-pill.alert { background: rgba(220,38,38,.25); color: var(--rm); }
-.sidebar-foot { margin-top: auto; padding: 12px 12px 16px; border-top: 1px solid rgba(255,255,255,.08); }
-.conn-row { display: flex; align-items: center; gap: 7px; font-size: 11px; color: rgba(255,255,255,.3); }
-.conn-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.2); flex-shrink: 0; transition: .3s; }
-.conn-dot.on  { background: var(--gm); box-shadow: 0 0 6px var(--gm); }
-.conn-dot.err { background: var(--rm); }
+/* ── Role select ──────────────────────────────────────── */
+.role-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 18px;gap:22px}
+.role-title{font-size:21px;font-weight:700;text-align:center}
+.role-hint{font-size:13px;color:var(--ink3);text-align:center;margin-top:-14px}
+.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:400px}
+.role-card{background:var(--bg2);border:2px solid var(--bd);border-radius:var(--rad);padding:18px 14px;text-align:center;cursor:pointer;transition:all .15s}
+.role-card:hover,.role-card:active{border-color:var(--g);background:var(--g2);transform:translateY(-2px);box-shadow:var(--sh2)}
+.role-icon{font-size:28px;margin-bottom:7px}
+.role-name{font-size:13px;font-weight:600}
+.role-desc{font-size:11px;color:var(--ink3);margin-top:2px;line-height:1.35}
 
-/* ── TOPBAR ─────────────────────────────────────────────────── */
-.topbar-title { font-size: 15px; font-weight: 700; color: var(--ink); }
-.topbar-sub   { font-size: 11px; color: var(--ink3); margin-left: 2px; }
-.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.period-sel   { font-size: 12px; font-weight: 500; padding: 6px 10px; border: 1px solid var(--bd); border-radius: 6px; background: var(--bg2); color: var(--ink); cursor: pointer; outline: none; }
-.period-sel:focus { border-color: var(--g); }
-.btn { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 600; padding: 7px 14px; border-radius: 6px; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 6px; transition: .12s; white-space: nowrap; }
-.btn-primary  { background: var(--g);   color: #fff; }
-.btn-primary:hover { background: var(--gd); }
-.btn-secondary{ background: var(--bg2); color: var(--ink2); border: 1px solid var(--bd); }
-.btn-secondary:hover { background: var(--bg3); }
-.btn-ghost    { background: transparent; color: var(--ink3); border: 1px solid transparent; }
-.btn-ghost:hover { background: var(--bg3); color: var(--ink2); }
-.btn-sm       { padding: 5px 10px; font-size: 11px; }
-.btn-danger   { background: var(--r); color: #fff; }
-.btn-row      { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+/* ── Main layout ──────────────────────────────────────── */
+.main{flex:1;display:flex;flex-direction:column;max-width:520px;margin:0 auto;width:100%}
+.content{flex:1;padding:14px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
 
-/* ── PAGES ─────────────────────────────────────────────────── */
-.page { display: none; animation: fadeUp .18s ease; }
-.page.active { display: block; }
-@keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+/* ── Section label ────────────────────────────────────── */
+.slabel{font-size:10px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--ink3);padding:4px 0 2px}
 
-/* ── KPI CARDS ─────────────────────────────────────────────── */
-.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
-.kpi { background: var(--bg2); border: 1px solid var(--bd); border-radius: 10px; padding: 16px; position: relative; overflow: hidden; }
-.kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--g); border-radius: 10px 10px 0 0; }
-.kpi.amber::before { background: var(--a); }
-.kpi.blue::before  { background: var(--b); }
-.kpi.red::before   { background: var(--r); }
-.kpi.purple::before{ background: var(--p); }
-.kpi-label { font-size: 10px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--ink3); margin-bottom: 8px; }
-.kpi-val   { font-family: 'IBM Plex Mono', monospace; font-size: 24px; font-weight: 500; color: var(--ink); line-height: 1; }
-.kpi-delta { font-size: 11px; color: var(--ink3); margin-top: 6px; display: flex; align-items: center; gap: 4px; }
-.kpi-delta .up { color: var(--g); font-weight: 600; }
-.kpi-delta .dn { color: var(--r); font-weight: 600; }
-.kpi-spark { height: 28px; margin-top: 8px; display: flex; align-items: flex-end; gap: 2px; }
-.spark-bar { flex: 1; background: var(--gl); border-radius: 2px 2px 0 0; min-height: 2px; transition: .3s; }
-.spark-bar.last { background: var(--g); }
+/* ── Action cards ─────────────────────────────────────── */
+.acard{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rad);padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all .15s;box-shadow:var(--sh)}
+.acard:hover,.acard:active{border-color:var(--g);transform:translateY(-1px);box-shadow:var(--sh2)}
+.acard-icon{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.acard-body{flex:1;min-width:0}
+.acard-title{font-size:14px;font-weight:600}
+.acard-sub{font-size:11px;color:var(--ink3);margin-top:1px}
+.acard-right{color:var(--ink4);font-size:18px;flex-shrink:0}
+.ic-green{background:var(--g2);color:var(--g)}
+.ic-amber{background:var(--a2);color:var(--a)}
+.ic-blue{background:var(--b2);color:var(--b)}
+.ic-gray{background:#F3F4F6;color:var(--ink2)}
+.ic-red{background:var(--r2);color:var(--r)}
 
-/* ── GRID LAYOUTS ──────────────────────────────────────────── */
-.grid-2    { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.grid-3    { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
-.grid-2-1  { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
-.grid-1-2  { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
-.grid-3-2  { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; }
+/* ── Formulário ───────────────────────────────────────── */
+.form-wrap{background:var(--bg2);flex:1;display:flex;flex-direction:column}
+.form-header{padding:14px 16px;display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--bd);background:var(--bg2);position:sticky;top:56px;z-index:100}
+.btn-back{width:34px;height:34px;border-radius:50%;background:var(--bg);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;color:var(--ink2);flex-shrink:0;transition:background .15s}
+.btn-back:hover{background:var(--bd)}
+.fh-info{}
+.fh-title{font-size:16px;font-weight:700}
+.fh-sub{font-size:11px;color:var(--ink3)}
+.form-body{padding:16px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
 
-/* ── CARD ───────────────────────────────────────────────────── */
-.card { background: var(--bg2); border: 1px solid var(--bd); border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; }
-.card-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 8px; }
-.card-title { font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--ink3); display: flex; align-items: center; gap: 8px; }
-.card-badge { font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 4px; background: var(--bg3); color: var(--ink3); text-transform: none; letter-spacing: 0; }
-.card-actions { display: flex; gap: 6px; flex-shrink: 0; }
+/* ── Campos ───────────────────────────────────────────── */
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg label{font-size:12px;font-weight:500;color:var(--ink2)}
+.fg label .req{color:var(--r)}
+input,select,textarea{width:100%;border:1.5px solid var(--bd);border-radius:var(--rad3);padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:15px;color:var(--ink);background:var(--bg);outline:none;transition:border-color .15s;-webkit-appearance:none}
+input:focus,select:focus,textarea:focus{border-color:var(--g);background:#fff}
+textarea{resize:vertical;min-height:64px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 
-/* ── CHART BARS ─────────────────────────────────────────────── */
-.chart-area { display: flex; align-items: flex-end; gap: 4px; height: 130px; padding: 0 0 4px; }
-.bar-col  { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; cursor: pointer; }
-.bar-stack{ width: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
-.bar-seg  { width: 100%; transition: .3s; min-height: 0; }
-.bar-seg:first-child { border-radius: 3px 3px 0 0; }
-.bar-seg.master { background: var(--b); }
-.bar-seg.wine   { background: var(--p); }
-.bar-seg.pdv    { background: var(--a); }
-.bar-seg.single { background: var(--g); border-radius: 3px 3px 0 0; }
-.bar-col:hover .bar-seg { opacity: .75; }
-.bar-lbl  { font-size: 8px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; font-family: 'IBM Plex Mono', monospace; }
+/* ── Autocomplete ─────────────────────────────────────── */
+.ac-wrap{position:relative}
+.ac-list{position:absolute;top:calc(100% + 3px);left:0;right:0;background:var(--bg2);border:1.5px solid var(--g);border-radius:var(--rad3);box-shadow:var(--sh2);z-index:300;max-height:200px;overflow-y:auto;display:none}
+.ac-list.open{display:block}
+.ac-item{padding:9px 12px;font-size:14px;cursor:pointer;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ac-item:last-child{border-bottom:none}
+.ac-item:hover,.ac-item.sel{background:var(--g2)}
+.ac-item-name{font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ac-item-meta{font-size:10px;color:var(--ink3);white-space:nowrap}
+.ac-selected{background:var(--g2);border-color:var(--g);font-size:13px}
 
-/* ── TABLES ──────────────────────────────────────────────────── */
-.twrap { overflow-x: auto; }
-.twrap table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 400px; }
-.twrap th { font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--ink3); padding: 8px 12px; border-bottom: 1px solid var(--bd); text-align: left; white-space: nowrap; background: var(--bg); }
-.twrap td { padding: 9px 12px; border-bottom: 1px solid var(--bd); color: var(--ink2); vertical-align: middle; }
-.twrap tr:last-child td { border-bottom: none; }
-.twrap tr:hover td { background: var(--bg3); }
-.td-b  { font-weight: 600; color: var(--ink); }
-.td-r  { text-align: right; font-family: 'IBM Plex Mono', monospace; }
-.td-c  { text-align: center; }
-.td-g  { color: var(--g); font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
-.td-r2 { color: var(--r); font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
-.td-a  { color: var(--a); font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
+/* ── Itens dinâmicos ──────────────────────────────────── */
+.items-wrap{display:flex;flex-direction:column;gap:7px}
+.item-row{background:var(--bg);border:1px solid var(--bd);border-radius:var(--rad3);padding:10px;display:flex;flex-direction:column;gap:7px}
+.item-row-top{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:flex-start}
+.item-row-bot{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.item-row-bot.with-price{grid-template-columns:1fr 1fr 1fr}
+.btn-rm{width:30px;height:30px;border-radius:50%;background:var(--r2);border:none;color:var(--r);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;transition:background .15s}
+.btn-rm:hover{background:var(--r)}
+.btn-rm:hover{color:#fff}
+.btn-add{width:100%;padding:9px;border:1.5px dashed var(--bd2);border-radius:var(--rad3);background:transparent;color:var(--ink3);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;transition:all .15s}
+.btn-add:hover{border-color:var(--g);color:var(--g)}
 
-/* ── TAGS ────────────────────────────────────────────────────── */
-.tag { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; display: inline-block; white-space: nowrap; letter-spacing: .2px; }
-.tag-g { background: var(--gl); color: var(--gd); }
-.tag-b { background: var(--bl); color: var(--b);  }
-.tag-a { background: var(--al); color: var(--a);  }
-.tag-r { background: var(--rl); color: var(--r);  }
-.tag-p { background: var(--pl); color: var(--p);  }
-.tag-o { background: var(--ol); color: var(--o);  }
-.tag-k { background: var(--bg3); color: var(--ink3); }
+/* ── Info / warn boxes ────────────────────────────────── */
+.info-box{background:var(--g2);border:1px solid var(--g3);border-radius:var(--rad3);padding:9px 12px;font-size:12px;color:var(--g1);line-height:1.5}
+.warn-box{background:var(--a2);border:1px solid var(--a3);border-radius:var(--rad3);padding:9px 12px;font-size:12px;color:#78350F;line-height:1.5}
+.calc-box{background:var(--b2);border:1px solid #BFDBFE;border-radius:var(--rad3);padding:9px 12px;font-size:13px;font-weight:600;color:var(--b);line-height:1.5;text-align:center}
 
-/* ── DRE ─────────────────────────────────────────────────────── */
-.dre-row { display: flex; align-items: center; padding: 6px 10px; border-radius: 5px; transition: .1s; gap: 8px; }
-.dre-row:hover { background: var(--bg3); }
-.dre-row.total { background: var(--bg3); border-left: 3px solid var(--g); margin: 3px 0; }
-.dre-row.total-neg { background: var(--rl); border-left: 3px solid var(--r); margin: 3px 0; }
-.dre-row.section { padding-top: 14px; padding-bottom: 2px; }
-.dre-label { flex: 1; font-size: 12.5px; color: var(--ink2); }
-.dre-row.total .dre-label { font-weight: 600; color: var(--ink); }
-.dre-row.section .dre-label { font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--ink3); }
-.dre-val { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500; min-width: 110px; text-align: right; }
-.dre-pct { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink3); min-width: 50px; text-align: right; }
-.dre-bar  { height: 4px; border-radius: 2px; background: var(--bd); overflow: hidden; flex-shrink: 0; width: 60px; }
-.dre-bar-fill { height: 100%; border-radius: 2px; background: var(--g); transition: .4s; }
+/* ── Botões ───────────────────────────────────────────── */
+.btn{width:100%;padding:13px;border-radius:var(--rad);border:none;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-primary{background:var(--g);color:#fff}
+.btn-primary:hover{background:var(--g1)}
+.btn-primary:active{transform:scale(.98)}
+.btn-secondary{background:var(--bg);border:1.5px solid var(--bd);color:var(--ink2)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-row{display:flex;flex-direction:column;gap:8px;padding-bottom:24px}
 
-/* ── FORMS ──────────────────────────────────────────────────── */
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.form-grid.c3 { grid-template-columns: 1fr 1fr 1fr; }
-.fg { display: flex; flex-direction: column; gap: 5px; }
-.fg.s2 { grid-column: span 2; }
-.fg.s3 { grid-column: span 3; }
-label { font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--ink3); }
-input, select, textarea { background: var(--bg2); border: 1.5px solid var(--bd); border-radius: 6px; color: var(--ink); font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; padding: 8px 11px; width: 100%; outline: none; transition: .12s; -webkit-appearance: none; }
-input:focus, select:focus, textarea:focus { border-color: var(--g); box-shadow: 0 0 0 3px rgba(5,150,105,.12); }
-textarea { resize: vertical; min-height: 64px; }
-.calc-f { background: var(--bg3); border: 1.5px solid var(--bd); border-radius: 6px; padding: 8px 11px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500; color: var(--g); min-height: 38px; display: flex; align-items: center; }
-input[type=date], input[type=time] { color-scheme: light; }
+/* ── Pendências ───────────────────────────────────────── */
+.pend-list{display:flex;flex-direction:column;gap:8px}
+.pend-card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rad);overflow:hidden;box-shadow:var(--sh)}
+.pend-head{padding:10px 13px;border-bottom:1px solid var(--bd);display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.pend-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.tag-ret{color:var(--a)}
+.tag-est{color:var(--b)}
+.pend-id{font-family:'DM Mono',monospace;font-size:10px;color:var(--ink4)}
+.pend-body{padding:10px 13px}
+.pend-cliente{font-size:14px;font-weight:600;margin-bottom:3px}
+.pend-itens{font-size:12px;color:var(--ink3);margin-bottom:8px;line-height:1.5}
+.pend-meta{font-size:11px;color:var(--ink4);margin-bottom:10px}
+.pend-btns{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.pbtn{padding:9px;border-radius:9px;border:1.5px solid;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.pbtn-ok{background:var(--g2);color:var(--g);border-color:var(--g3)}
+.pbtn-ok:hover{background:var(--g);color:#fff}
+.pbtn-edit{background:var(--a2);color:var(--a);border-color:var(--a3)}
+.pbtn-edit:hover{background:var(--a);color:#fff}
 
-/* ── MODAL ──────────────────────────────────────────────────── */
-.modal-bg { display: none; position: fixed; inset: 0; background: rgba(13,17,23,.6); z-index: 200; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(3px); }
-.modal-bg.open { display: flex; }
-.modal { background: var(--bg2); border: 1px solid var(--bd); border-radius: 12px; padding: 24px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; animation: popIn .18s ease; box-shadow: 0 20px 60px rgba(0,0,0,.15); }
-@keyframes popIn { from { transform: scale(.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.modal-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-.modal-title { font-size: 15px; font-weight: 700; color: var(--ink); }
-.modal-close { background: none; border: none; cursor: pointer; color: var(--ink3); font-size: 18px; padding: 2px 6px; border-radius: 4px; }
-.modal-close:hover { background: var(--bg3); color: var(--ink); }
-.divider { height: 1px; background: var(--bd); margin: 14px 0; }
+/* ── Toast ────────────────────────────────────────────── */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(120px);background:var(--ink);color:#fff;padding:11px 20px;border-radius:99px;font-size:13px;font-weight:500;z-index:999;transition:transform .3s cubic-bezier(.34,1.56,.64,1);max-width:90vw;text-align:center;pointer-events:none;white-space:pre-line}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.ok{background:var(--g)}
+.toast.err{background:var(--r)}
 
-/* ── ALERTS / BANNERS ──────────────────────────────────────── */
-.alert-row { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px; border-radius: 8px; margin-bottom: 10px; font-size: 12.5px; }
-.alert-g { background: var(--gl); border: 1px solid #A7F3D0; color: var(--gd); }
-.alert-a { background: var(--al); border: 1px solid #FDE68A; color: #92400E; }
-.alert-r { background: var(--rl); border: 1px solid #FECACA; color: #991B1B; }
-.alert-b { background: var(--bl); border: 1px solid #BFDBFE; color: #1E40AF; }
-.alert-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+/* ── Empty ────────────────────────────────────────────── */
+.empty{text-align:center;padding:32px 16px;color:var(--ink3)}
+.empty-icon{font-size:32px;margin-bottom:8px}
+.empty-txt{font-size:13px}
 
-/* ── PROGRESS ──────────────────────────────────────────────── */
-.prog-wrap { background: var(--bg3); border-radius: 4px; height: 6px; overflow: hidden; }
-.prog-fill { height: 100%; border-radius: 4px; background: var(--g); transition: .4s; }
-.prog-fill.amber { background: var(--a); }
-.prog-fill.red   { background: var(--r); }
-.prog-fill.blue  { background: var(--b); }
-
-/* ── INLINE TREND ──────────────────────────────────────────── */
-.trend { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; }
-.trend.up   { background: var(--gl); color: var(--gd); }
-.trend.down { background: var(--rl); color: var(--r); }
-.trend.flat { background: var(--bg3); color: var(--ink3); }
-
-/* ── SCORE RING ────────────────────────────────────────────── */
-.score-ring { position: relative; width: 72px; height: 72px; flex-shrink: 0; }
-.score-ring svg { transform: rotate(-90deg); }
-.score-ring .val { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 500; color: var(--ink); }
-
-/* ── TABLE SECTION HEADER ─────────────────────────────────── */
-.tsec td { background: var(--bg) !important; font-size: 10px !important; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--ink3) !important; padding: 8px 12px 4px !important; border-bottom: none !important; }
-
-/* ── TOAST ──────────────────────────────────────────────────── */
-.toast-wrap { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 300; }
-.toast { background: var(--ink); color: #fff; border-radius: 8px; padding: 11px 16px; font-size: 12.5px; display: flex; align-items: center; gap: 9px; animation: slideUp .22s ease; max-width: 320px; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
-.toast.ok  { background: var(--gd); }
-.toast.err { background: var(--r);  }
-@keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-/* ── LOADING ────────────────────────────────────────────────── */
-.spin-wrap { display: flex; align-items: center; justify-content: center; padding: 40px; gap: 10px; color: var(--ink3); font-size: 12.5px; }
-.spin { width: 16px; height: 16px; border: 2px solid var(--bd); border-top-color: var(--g); border-radius: 50%; animation: spin 1s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.empty-state { text-align: center; padding: 32px 20px; color: var(--ink3); }
-.empty-state .es-icon { font-size: 28px; margin-bottom: 8px; }
-.empty-state p { font-size: 12.5px; }
-
-/* ── FILTER BAR ─────────────────────────────────────────────── */
-.fbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-.fbar select, .fbar input { max-width: 150px; font-size: 12px; padding: 6px 9px; }
-.fbar .sep { width: 1px; height: 20px; background: var(--bd); flex-shrink: 0; }
-
-/* ── SUMMARY PANEL ──────────────────────────────────────────── */
-.sum-panel { background: var(--ink); border-radius: 10px; padding: 20px; color: #fff; margin-bottom: 16px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
-.sum-item { }
-.sum-label { font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,.4); margin-bottom: 4px; }
-.sum-val   { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 500; color: #fff; }
-.sum-sub   { font-size: 10px; color: rgba(255,255,255,.4); margin-top: 2px; }
-.sum-divider { width: 1px; height: 40px; background: rgba(255,255,255,.1); }
-
-/* ── RFM MATRIX ─────────────────────────────────────────────── */
-.rfm-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; }
-.rfm-card { border-radius: 8px; padding: 12px; text-align: center; }
-.rfm-n { font-family: 'IBM Plex Mono', monospace; font-size: 28px; font-weight: 500; line-height: 1; }
-.rfm-l { font-size: 10px; font-weight: 600; margin-top: 4px; letter-spacing: .3px; }
-.rfm-p { font-size: 10px; color: var(--ink3); margin-top: 2px; }
-
-/* ── RESPONSIVE ─────────────────────────────────────────────── */
-@media (max-width: 900px) {
-  .grid-2, .grid-2-1, .grid-3-2, .grid-1-2, .grid-3 { grid-template-columns: 1fr; }
-  .sidebar { width: 48px; }
-  .sidebar .brand-name, .sidebar .brand-sub, .sidebar .nav-sec, .sidebar .nav-btn span:not(.nav-ic) { display: none; }
-  .nav-btn { justify-content: center; margin: 1px 4px; padding: 8px; }
-  .sidebar .sidebar-foot .conn-row span { display: none; }
-}
+/* ── Segmented (tipo cliente) ─────────────────────────── */
+.seg{display:flex;background:var(--bg);border:1.5px solid var(--bd);border-radius:var(--rad3);overflow:hidden}
+.seg-btn{flex:1;padding:9px 4px;border:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:var(--ink3);cursor:pointer;transition:all .15s;text-align:center}
+.seg-btn.active{background:var(--g);color:#fff}
 </style>
 </head>
 <body>
 
-<div class="shell">
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbxholHSDhAuzenkGyrBAukgqdNaJXArt5YBL-pRRELOHDC2uOHu_5M59eIawYWYytb2/exec';
 
-<!-- ══════════════ SIDEBAR ══════════════ -->
-<nav class="sidebar">
-  <div class="brand">
-    <div class="brand-mark">
-      <div class="brand-icon">HE</div>
-      <div>
-        <div class="brand-name">Harden Express</div>
-        <div class="brand-sub">ERP · v2.0</div>
-      </div>
-    </div>
-  </div>
+// Cache de dados da planilha
+let CLIENTES = [];
+let PRODUTOS  = [];
+let VEICULOS  = [];
+let PAPEL = '';
+let NOME  = '';
+let _formSubmit = null;
+let _itemN = 0;
 
-  <div class="nav-sec">Análise</div>
-  <button class="nav-btn active" onclick="goto('dashboard')" id="nb-dashboard"><span class="nav-ic">▦</span><span>Dashboard</span></button>
-  <button class="nav-btn" onclick="goto('dre')"       id="nb-dre">      <span class="nav-ic">◈</span><span>DRE &amp; Caixa</span></button>
-  <button class="nav-btn" onclick="goto('vendas')"    id="nb-vendas">   <span class="nav-ic">↑</span><span>Vendas</span></button>
-  <button class="nav-btn" onclick="goto('clientes')"  id="nb-clientes"> <span class="nav-ic">◉</span><span>Clientes</span></button>
-  <button class="nav-btn" onclick="goto('custos')"    id="nb-custos">   <span class="nav-ic">◧</span><span>Custos</span></button>
+// Carregar dados ao iniciar
+async function carregarDados() {
+  try {
+    const [rc, rp, rv] = await Promise.all([
+      fetch(API+'?endpoint=clientes').then(r=>r.json()),
+      fetch(API+'?endpoint=produtos').then(r=>r.json()),
+      fetch(API+'?endpoint=abastecimento&limit=1').then(r=>r.json()), // usado só para confirmar API ok
+    ]);
+    CLIENTES = (rc.dados||[]).map(x=>({id:x.id, nome:x.nome_canonico, tipo:x.tipo||''}));
+    PRODUTOS  = (rp.dados||[]).map(x=>({sku:x.sku, nome:x.nome_canonico, cat:x.categoria, ret:x.retornavel, tipo_ret:x.tipo_retorno, litros:x.litros_barril}));
+    // Veículos: extrair placas únicas dos abastecimentos ou usar lista fixa
+    VEICULOS = [
+      {placa:'ABC-1234', modelo:'VW Delivery 11.180', empresa:'Master'},
+      {placa:'DEF-5678', modelo:'VW Delivery 9.170',  empresa:'Master'},
+      {placa:'GHI-9012', modelo:'Fiat Ducato',         empresa:'Master'},
+      {placa:'JKL-3456', modelo:'Renault Master',      empresa:'Master'},
+      {placa:'MNO-7890', modelo:'Ford Cargo 816',      empresa:'Master'},
+      {placa:'PQR-1234', modelo:'Mercedes Sprinter',   empresa:'Winechopp'},
+      {placa:'STU-5678', modelo:'VW Delivery 6.160',   empresa:'Winechopp'},
+    ];
+  } catch(e) { console.log('Erro carregando dados:', e); }
+}
+carregarDados();
+</script>
 
-  <div class="nav-sec">Operação</div>
-  <button class="nav-btn" onclick="goto('estoque')"   id="nb-estoque">    <span class="nav-ic">▣</span><span>Estoque</span></button>
-  <button class="nav-btn" onclick="goto('vasilhames')" id="nb-vasilhames"><span class="nav-ic">◎</span><span>Vasilhames</span><span class="nav-pill alert" id="vas-alert-pill" style="display:none">!</span></button>
-  <button class="nav-btn" onclick="goto('mix')"       id="nb-mix">       <span class="nav-ic">⊞</span><span>Mix de Produtos</span></button>
-
-  <div class="nav-sec">Campo</div>
-  <button class="nav-btn" onclick="goto('diesel')"    id="nb-diesel">   <span class="nav-ic">⛽</span><span>Diesel</span></button>
-  <button class="nav-btn" onclick="goto('rotas')"     id="nb-rotas">    <span class="nav-ic">→</span><span>Rotas</span></button>
-  <button class="nav-btn" onclick="goto('retorno')"   id="nb-retorno">  <span class="nav-ic">↓</span><span>Retorno Barril</span></button>
-
-  <div class="nav-sec">Sistema</div>
-  <button class="nav-btn" onclick="goto('config')"    id="nb-config">   <span class="nav-ic">⚙</span><span>Configurações</span></button>
-
-  <div class="sidebar-foot">
-    <div class="conn-row"><div class="conn-dot" id="cDot"></div><span id="cTxt">Verificando...</span></div>
-  </div>
-</nav>
-
-<!-- ══════════════ MAIN ══════════════ -->
-<div class="main">
-
+<!-- TOPBAR -->
 <div class="topbar">
-  <div>
-    <div class="topbar-title" id="tb-title">Dashboard</div>
-    <div class="topbar-sub" id="tb-sub">Mar/2025 → Mar/2026</div>
+  <div class="logo">Harden <span class="logo-sub">Operações</span></div>
+  <div id="role-chip" class="role-chip" style="display:none" onclick="voltarRoles()">
+    <span id="role-chip-txt">—</span> <span style="opacity:.6">↩</span>
   </div>
-  <div class="topbar-right">
-    <select class="period-sel" id="g-mes" onchange="reloadPage()">
-      <option value="">Todo o período</option>
-    </select>
-    <select class="period-sel" id="g-emp" onchange="reloadPage()">
-      <option value="">Todas as operações</option>
-      <option value="Master">Master Chopp</option>
-      <option value="Winechopp">Winechopp</option>
-      <option value="PDV">PDV</option>
-    </select>
-    <button class="btn btn-secondary btn-sm" onclick="reloadPage()">↻</button>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     TELA: SELEÇÃO DE PAPEL
+════════════════════════════════════════════════════ -->
+<div class="screen active" id="sc-roles">
+  <div class="role-screen">
+    <div>
+      <div class="role-title">Quem está acessando?</div>
+      <div class="role-hint" style="margin-top:6px">Selecione para ver as ações disponíveis</div>
+    </div>
+    <div class="role-grid">
+      <div class="role-card" onclick="setPapel('motorista')">
+        <div class="role-icon">🚛</div>
+        <div class="role-name">Motorista</div>
+        <div class="role-desc">Retornos em rota e abastecimento</div>
+      </div>
+      <div class="role-card" onclick="setPapel('patio')">
+        <div class="role-icon">🏭</div>
+        <div class="role-name">Pátio</div>
+        <div class="role-desc">Validar chegadas, estoque e fábrica</div>
+      </div>
+      <div class="role-card" onclick="setPapel('comercial')">
+        <div class="role-icon">📋</div>
+        <div class="role-name">Comercial</div>
+        <div class="role-desc">Validar retornos de distribuidores</div>
+      </div>
+      <div class="role-card" onclick="setPapel('operacional')">
+        <div class="role-icon">⚙️</div>
+        <div class="role-name">Operacional</div>
+        <div class="role-desc">Abastecimento, tanque e ajustes</div>
+      </div>
+    </div>
   </div>
 </div>
 
-<div class="content">
-
-<!-- ══ DASHBOARD ══ -->
-<div class="page active" id="page-dashboard">
-  <div id="dash-loading" class="spin-wrap"><div class="spin"></div> Conectando ao Sheets...</div>
-  <div id="dash-body" style="display:none">
-
-    <!-- Summary panel -->
-    <div class="sum-panel" id="sum-panel"></div>
-
-    <!-- KPI grid -->
-    <div class="kpi-grid" id="kpi-grid"></div>
-
-    <!-- Charts row -->
-    <div class="grid-3-2" style="margin-bottom:16px">
-      <div class="card">
-        <div class="card-hdr">
-          <div class="card-title">Receita mensal
-            <div class="card-badge" id="ch-label">todas as operações</div>
-          </div>
-          <div style="display:flex;gap:10px">
-            <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--ink3)"><span style="width:8px;height:8px;background:var(--b);border-radius:2px;display:inline-block"></span>Master</span>
-            <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--ink3)"><span style="width:8px;height:8px;background:var(--p);border-radius:2px;display:inline-block"></span>Wine</span>
-            <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--ink3)"><span style="width:8px;height:8px;background:var(--a);border-radius:2px;display:inline-block"></span>PDV</span>
-          </div>
+<!-- ═══════════════════════════════════════════════════
+     TELA: MOTORISTA
+════════════════════════════════════════════════════ -->
+<div class="screen" id="sc-motorista">
+  <div class="main">
+    <div class="content">
+      <div class="slabel">Lançamentos de campo</div>
+      <div class="acard" onclick="abrirForm('retorno-motorista')">
+        <div class="acard-icon ic-amber">🔄</div>
+        <div class="acard-body">
+          <div class="acard-title">Retorno de vasilhame</div>
+          <div class="acard-sub">Barris / chopeiras coletados em rota</div>
         </div>
-        <div class="chart-area" id="ch-receita"></div>
+        <div class="acard-right">›</div>
       </div>
-      <div class="card">
-        <div class="card-hdr"><div class="card-title">Segmentação RFM</div></div>
-        <div class="rfm-grid" id="rfm-grid"></div>
-      </div>
-    </div>
-
-    <!-- Alerts -->
-    <div id="dash-alerts"></div>
-
-    <!-- Tables row -->
-    <div class="grid-2">
-      <div class="card">
-        <div class="card-hdr"><div class="card-title">Top 10 clientes <span class="card-badge">por receita</span></div></div>
-        <div class="twrap"><table>
-          <thead><tr><th>#</th><th>Cliente</th><th>Op.</th><th class="td-r">Receita</th><th class="td-r">Pedidos</th><th>Seg.</th></tr></thead>
-          <tbody id="top-cli-tbody"></tbody>
-        </table></div>
-      </div>
-      <div class="card">
-        <div class="card-hdr"><div class="card-title">Mix de produtos <span class="card-badge">barris — volume</span></div></div>
-        <div class="twrap"><table>
-          <thead><tr><th>#</th><th>Produto</th><th class="td-r">Barris</th><th class="td-r">Receita</th><th class="td-r">Share</th></tr></thead>
-          <tbody id="top-prod-tbody"></tbody>
-        </table></div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<!-- ══ DRE ══ -->
-<div class="page" id="page-dre">
-  <div class="grid-2-1">
-    <div>
-      <div class="card">
-        <div class="card-hdr">
-          <div class="card-title">DRE Gerencial</div>
-          <div class="card-badge" id="dre-badge">carregando...</div>
+      <div class="acard" onclick="abrirForm('abastecimento')">
+        <div class="acard-icon ic-blue">⛽</div>
+        <div class="acard-body">
+          <div class="acard-title">Abastecimento</div>
+          <div class="acard-sub">Tanque próprio ou posto externo</div>
         </div>
-        <!-- DRE headers -->
-        <div style="display:flex;align-items:center;padding:0 10px 8px;border-bottom:1px solid var(--bd);gap:8px">
-          <div style="flex:1;font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--ink3)">Linha</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink3);min-width:110px;text-align:right">Valor R$</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink3);min-width:50px;text-align:right">% rec.</div>
-          <div style="width:60px;font-size:9px;color:var(--ink3);text-align:right">Barra</div>
+        <div class="acard-right">›</div>
+      </div>
+      <div class="acard" onclick="abrirForm('ocorrencia')">
+        <div class="acard-icon ic-gray">⚠️</div>
+        <div class="acard-body">
+          <div class="acard-title">Ocorrência de entrega</div>
+          <div class="acard-sub">Cliente ausente, entrega parcial…</div>
         </div>
-        <div id="dre-body"><div class="spin-wrap"><div class="spin"></div></div></div>
-      </div>
-    </div>
-    <div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-hdr"><div class="card-title">Margens</div></div>
-        <div id="margens-body"></div>
-      </div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-hdr"><div class="card-title">Gastos por operação</div></div>
-        <div id="op-split-body"></div>
-      </div>
-      <div class="card">
-        <div class="card-hdr"><div class="card-title">Fluxo de caixa mensal</div></div>
-        <div class="twrap" id="fc-body"><div class="spin-wrap"><div class="spin"></div></div></div>
+        <div class="acard-right">›</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ══ VENDAS ══ -->
-<div class="page" id="page-vendas">
-  <div class="fbar">
-    <input type="text" id="vd-busca" placeholder="Buscar cliente ou SKU..." oninput="loadVendas()" style="max-width:200px">
-    <div class="sep"></div>
-    <span style="font-size:11px;color:var(--ink3)">Filtros adicionais aplicados no topo</span>
-  </div>
-
-  <div class="kpi-grid" id="vd-kpis"></div>
-
-  <div class="grid-3-2" style="margin-bottom:16px">
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Evolução de receita por operação</div></div>
-      <div class="chart-area" id="vd-chart"></div>
-    </div>
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Receita por operação <span class="card-badge" id="vd-period-label"></span></div></div>
-      <div id="vd-op-split"></div>
-    </div>
-  </div>
-
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-hdr">
-        <div class="card-title">Por produto <span class="card-badge" id="vd-plabel">período selecionado</span></div>
+<!-- ═══════════════════════════════════════════════════
+     TELA: PÁTIO
+════════════════════════════════════════════════════ -->
+<div class="screen" id="sc-patio">
+  <div class="main">
+    <div class="content">
+      <div class="slabel">⏳ Aguardando validação do pátio</div>
+      <div id="pend-patio"></div>
+      <div class="slabel">Novos lançamentos</div>
+      <div class="acard" onclick="abrirForm('retorno-patio')">
+        <div class="acard-icon ic-amber">🔄</div>
+        <div class="acard-body">
+          <div class="acard-title">Entrada de vasilhame</div>
+          <div class="acard-sub">Distribuidor, PDV ou Delivery devolveu</div>
+        </div>
+        <div class="acard-right">›</div>
       </div>
-      <div class="twrap"><table>
-        <thead><tr><th>SKU</th><th>Produto</th><th class="td-r">Barris</th><th class="td-r">Litros</th><th class="td-r">Receita</th><th class="td-r">Share</th></tr></thead>
-        <tbody id="vd-prod-tbody"></tbody>
-      </table></div>
-    </div>
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Histórico de pedidos <span class="card-badge">últimos 100</span></div></div>
-      <div class="twrap"><table>
-        <thead><tr><th>Data</th><th>Pedido</th><th>Operação</th><th>Cliente</th><th>Produto</th><th class="td-r">Barris</th><th class="td-r">Valor</th></tr></thead>
-        <tbody id="vd-hist-tbody"></tbody>
-      </table></div>
-    </div>
-  </div>
-</div>
-
-<!-- ══ CLIENTES ══ -->
-<div class="page" id="page-clientes">
-  <div class="fbar">
-    <select id="cli-seg" onchange="loadClientes()" class="period-sel">
-      <option value="">Todos os segmentos</option>
-      <option value="Campeão">Campeão</option>
-      <option value="Fiel">Fiel</option>
-      <option value="Novo">Novo</option>
-      <option value="Regular">Regular</option>
-      <option value="Em risco">Em risco</option>
-    </select>
-    <input type="text" id="cli-busca" placeholder="Buscar cliente..." oninput="loadClientes()" style="max-width:180px">
-  </div>
-
-  <div class="kpi-grid" id="cli-kpis"></div>
-
-  <!-- RFM explainer -->
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-hdr"><div class="card-title">Matriz RFM — Segmentação de clientes</div><div class="card-badge">recência · frequência · valor</div></div>
-    <div class="rfm-grid" id="cli-rfm-grid"></div>
-  </div>
-
-  <div class="grid-2-1">
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Ranking completo de clientes</div></div>
-      <div class="twrap"><table>
-        <thead><tr><th>#</th><th>Cliente</th><th>Op.</th><th class="td-r">Receita</th><th class="td-r">Pedidos</th><th class="td-r">Ticket</th><th class="td-r">Recência</th><th>Segmento</th></tr></thead>
-        <tbody id="cli-tbody"></tbody>
-      </table></div>
-    </div>
-    <div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-hdr"><div class="card-title">Clientes em risco</div><div class="card-badge">sem comprar há +60 dias</div></div>
-        <div id="cli-risk-body"></div>
+      <div class="acard" onclick="abrirForm('entrada-estoque')">
+        <div class="acard-icon ic-blue">📦</div>
+        <div class="acard-body">
+          <div class="acard-title">Entrada de estoque</div>
+          <div class="acard-sub">Mercadoria chegou no pátio</div>
+        </div>
+        <div class="acard-right">›</div>
       </div>
-      <div class="card">
-        <div class="card-hdr"><div class="card-title">Crescimento de base</div></div>
-        <div class="chart-area" id="cli-chart" style="height:90px"></div>
+      <div class="acard" onclick="abrirForm('saida-fabrica')">
+        <div class="acard-icon ic-green">🏭</div>
+        <div class="acard-body">
+          <div class="acard-title">Envio para fábrica</div>
+          <div class="acard-sub">Barris vazios saindo para Leme / Campinas</div>
+        </div>
+        <div class="acard-right">›</div>
+      </div>
+      <div class="acard" onclick="abrirForm('entrada-fabrica')">
+        <div class="acard-icon ic-green">🍺</div>
+        <div class="acard-body">
+          <div class="acard-title">Chegada da fábrica</div>
+          <div class="acard-sub">Barris cheios recebidos — gera entrada de estoque</div>
+        </div>
+        <div class="acard-right">›</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ══ CUSTOS ══ -->
-<div class="page" id="page-custos">
-  <div class="kpi-grid" id="cc-kpis"></div>
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Despesas por centro de custo</div></div>
-      <div id="cc-bars-body"></div>
-    </div>
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Despesas por categoria</div></div>
-      <div class="twrap"><table>
-        <thead><tr><th>Categoria</th><th>C.Custo</th><th class="td-r">Valor</th><th class="td-r">%</th></tr></thead>
-        <tbody id="cc-cat-tbody"></tbody>
-      </table></div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="card-hdr"><div class="card-title">Detalhamento de lançamentos</div>
-      <button class="btn btn-primary btn-sm" onclick="openM('m-lancamento')">+ Lançamento</button>
-    </div>
-    <div class="twrap"><table>
-      <thead><tr><th>Data</th><th>Empresa</th><th>Tipo</th><th>Categoria</th><th>C.Custo</th><th>Histórico</th><th class="td-r">Valor</th><th>Status</th></tr></thead>
-      <tbody id="cc-det-tbody"></tbody>
-    </table></div>
-  </div>
-</div>
-
-<!-- ══ ESTOQUE ══ -->
-<div class="page" id="page-estoque">
-  <div class="alert-row alert-b" style="margin-bottom:16px">
-    <span class="alert-icon">ℹ</span>
-    <div>Entradas de compra são lançadas na aba <strong>📦 Estoque</strong> do Sheets. Saídas são geradas automaticamente pelas vendas. Use o botão abaixo para ajustes manuais.</div>
-  </div>
-
-  <div class="kpi-grid" id="est-kpis"></div>
-
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-hdr">
-        <div class="card-title">Saldo atual por SKU</div>
-        <button class="btn btn-primary btn-sm" onclick="openM('m-estoque')">+ Entrada/Ajuste</button>
-      </div>
-      <div class="twrap"><table>
-        <thead><tr><th>SKU</th><th>Produto</th><th>Empresa</th><th class="td-r">Entradas</th><th class="td-r">Saídas</th><th class="td-r">Saldo</th><th>Status</th></tr></thead>
-        <tbody id="est-tbody"></tbody>
-      </table></div>
-    </div>
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Últimas movimentações</div></div>
-      <div class="twrap"><table>
-        <thead><tr><th>Data</th><th>Tipo</th><th>SKU</th><th>Empresa</th><th class="td-r">E/S</th><th class="td-r">Saldo após</th></tr></thead>
-        <tbody id="est-mov-tbody"></tbody>
-      </table></div>
+<!-- ═══════════════════════════════════════════════════
+     TELA: COMERCIAL
+════════════════════════════════════════════════════ -->
+<div class="screen" id="sc-comercial">
+  <div class="main">
+    <div class="content">
+      <div class="slabel">⏳ Aguardando validação do comercial</div>
+      <div id="pend-comercial"></div>
     </div>
   </div>
 </div>
 
-<!-- ══ VASILHAMES ══ -->
-<div class="page" id="page-vasilhames">
-  <div id="vas-critical-alerts"></div>
-  <div class="kpi-grid" id="vas-kpis"></div>
-  <div class="grid-3-2">
-    <div class="card">
-      <div class="card-hdr">
-        <div class="card-title">Barris em campo por cliente</div>
-        <button class="btn btn-primary btn-sm" onclick="openM('m-retorno')">↓ Registrar retorno</button>
+<!-- ═══════════════════════════════════════════════════
+     TELA: OPERACIONAL
+════════════════════════════════════════════════════ -->
+<div class="screen" id="sc-operacional">
+  <div class="main">
+    <div class="content">
+      <div class="slabel">Tanque e frota</div>
+      <div class="acard" onclick="abrirForm('entrada-tanque')">
+        <div class="acard-icon ic-amber">⛽</div>
+        <div class="acard-body">
+          <div class="acard-title">Entrada de diesel no tanque</div>
+          <div class="acard-sub" id="tanque-sub">Saldo atual: carregando…</div>
+        </div>
+        <div class="acard-right">›</div>
       </div>
-      <div class="twrap"><table>
-        <thead><tr><th>Cliente</th><th>Op.</th><th>Produto</th><th class="td-r">Enviados</th><th class="td-r">Retornados</th><th class="td-r">Pendentes</th><th>Status</th></tr></thead>
-        <tbody id="vas-tbody"></tbody>
-      </table></div>
-    </div>
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Movimentações recentes</div></div>
-      <div class="twrap"><table>
-        <thead><tr><th>Data</th><th>Tipo</th><th>Cliente</th><th class="td-r">Qtd</th></tr></thead>
-        <tbody id="vas-mov-tbody"></tbody>
-      </table></div>
-    </div>
-  </div>
-</div>
-
-<!-- ══ MIX DE PRODUTOS ══ -->
-<div class="page" id="page-mix">
-  <div class="kpi-grid" id="mix-kpis"></div>
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Ranking por receita <span class="card-badge">todos os produtos</span></div></div>
-      <div class="twrap"><table>
-        <thead><tr><th>#</th><th>SKU</th><th>Produto</th><th>Cat.</th><th class="td-r">Barris</th><th class="td-r">Litros</th><th class="td-r">Receita</th><th class="td-r">Share</th></tr></thead>
-        <tbody id="mix-tbody"></tbody>
-      </table></div>
-    </div>
-    <div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-hdr"><div class="card-title">Volume por categoria</div></div>
-        <div id="mix-cat-body"></div>
+      <div class="acard" onclick="abrirForm('abastecimento')">
+        <div class="acard-icon ic-blue">🚛</div>
+        <div class="acard-body">
+          <div class="acard-title">Abastecimento de veículo</div>
+          <div class="acard-sub">Selecionar veículo da frota</div>
+        </div>
+        <div class="acard-right">›</div>
       </div>
-      <div class="card">
-        <div class="card-hdr"><div class="card-title">Evolução de mix mensal</div></div>
-        <div class="chart-area" id="mix-chart" style="height:90px"></div>
+      <div class="slabel">Estoque</div>
+      <div class="acard" onclick="abrirForm('ajuste-estoque')">
+        <div class="acard-icon ic-blue">📋</div>
+        <div class="acard-body">
+          <div class="acard-title">Ajuste de estoque</div>
+          <div class="acard-sub">Correção por inventário ou quebra</div>
+        </div>
+        <div class="acard-right">›</div>
+      </div>
+      <div class="acard" onclick="abrirForm('saldo-inicial')">
+        <div class="acard-icon ic-gray">📌</div>
+        <div class="acard-body">
+          <div class="acard-title">Saldo inicial — 27/04</div>
+          <div class="acard-sub">Lançar inventário físico</div>
+        </div>
+        <div class="acard-right">›</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ══ DIESEL ══ -->
-<div class="page" id="page-diesel">
-  <div class="alert-row alert-g" style="margin-bottom:16px">
-    <span class="alert-icon">⛽</span>
-    <div>Registre aqui cada abastecimento. O custo é lançado automaticamente no Financeiro como <strong>Diesel / Combustível</strong>.</div>
-  </div>
-  <div class="kpi-grid" id="dsl-kpis"></div>
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-hdr">
-        <div class="card-title">Histórico de abastecimentos</div>
-        <button class="btn btn-primary btn-sm" onclick="openM('m-diesel')">+ Abastecimento</button>
-      </div>
-      <div class="twrap"><table>
-        <thead><tr><th>Data</th><th>Placa</th><th>Motorista</th><th class="td-r">Litros</th><th class="td-r">R$/L</th><th class="td-r">Total</th><th class="td-r">Km/L</th></tr></thead>
-        <tbody id="dsl-tbody"></tbody>
-      </table></div>
-    </div>
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Performance por veículo</div></div>
-      <div id="dsl-veic-body"></div>
-    </div>
+<!-- ═══════════════════════════════════════════════════
+     TELA: FORMULÁRIO
+════════════════════════════════════════════════════ -->
+<div class="screen" id="sc-form">
+  <div class="form-wrap">
+    <div class="form-header" id="form-header"></div>
+    <div class="form-body" id="form-body"></div>
   </div>
 </div>
-
-<!-- ══ ROTAS ══ -->
-<div class="page" id="page-rotas">
-  <div class="kpi-grid" id="rot-kpis"></div>
-  <div class="card">
-    <div class="card-hdr">
-      <div class="card-title">Histórico de rotas</div>
-      <button class="btn btn-primary btn-sm" onclick="openM('m-rota')">+ Nova rota</button>
-    </div>
-    <div class="twrap"><table>
-      <thead><tr><th>Data</th><th>Placa</th><th>Motorista</th><th>Destino</th><th class="td-r">Km</th><th class="td-r">Duração</th><th class="td-r">Diesel est.</th><th>Status</th></tr></thead>
-      <tbody id="rot-tbody"></tbody>
-    </table></div>
-  </div>
-</div>
-
-<!-- ══ RETORNO BARRIL ══ -->
-<div class="page" id="page-retorno">
-  <div class="alert-row alert-g" style="margin-bottom:16px">
-    <span class="alert-icon">↓</span>
-    <div>Registre aqui os barris recebidos dos clientes. O saldo de vasilhames pendentes é atualizado automaticamente.</div>
-  </div>
-  <div class="card">
-    <div class="card-hdr">
-      <div class="card-title">Retornos registrados</div>
-      <button class="btn btn-primary btn-sm" onclick="openM('m-retorno')">+ Registrar retorno</button>
-    </div>
-    <div class="twrap"><table>
-      <thead><tr><th>Data</th><th>Cliente</th><th>Produto</th><th class="td-r">Qtd</th><th>Motorista</th><th>Obs.</th></tr></thead>
-      <tbody id="ret-tbody"></tbody>
-    </table></div>
-  </div>
-</div>
-
-<!-- ══ CONFIG ══ -->
-<div class="page" id="page-config">
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Conexão Google Sheets</div></div>
-      <div class="fg" style="margin-bottom:12px">
-        <label>URL do Apps Script (Web App)</label>
-        <input type="text" id="cfg-url" placeholder="https://script.google.com/macros/s/AKfycbyWNrvnuyJg77NsHtMztjN08p3VSV0_HqGN0o5g_UXKmQ4woMbptuZ4t9kq3LSK2UZK/exec">
-      </div>
-      <div class="fg" style="margin-bottom:14px">
-        <label>ID da planilha</label>
-        <input type="text" id="cfg-sid" value="1_nvHeCHWr-VSYmbC7xALzoPFeQGwhpStrmudgM2QuOY">
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-secondary" onclick="testarConn()">◎ Testar</button>
-        <button class="btn btn-primary" onclick="salvarCfg()">✓ Salvar</button>
-      </div>
-      <div id="cfg-res" style="margin-top:12px;font-size:12px;color:var(--ink3)"></div>
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--bd)">
-        <button class="btn btn-ghost btn-sm" onclick="rodarDiagnostico()">🔍 Diagnosticar conexão e abas</button>
-      </div>
-      <div id="diag-res" style="margin-top:10px;font-size:11px;color:var(--ink3);font-family:'IBM Plex Mono',monospace;white-space:pre-wrap;background:var(--bg);padding:10px;border-radius:6px;display:none"></div>
-    </div>
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Abas da planilha</div></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        ${[['📊 Vendas','export Bling/ABrain'],['💰 Financeiro','despesas e CMV'],['📦 Estoque','entradas de barris'],['🔄 Vasilhames','barris em campo'],['⛽ Diesel','abastecimentos (app)'],['🚛 Rotas','rotas (app)'],['🔑 De-Para','dicionário SKU'],['🗂️ Plano de Contas','referência']].map(([n,d])=>`<div style="background:var(--bg);border-radius:7px;padding:9px 11px"><div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:1px">${n}</div><div style="font-size:10px;color:var(--ink3)">${d}</div></div>`).join('')}
-      </div>
-    </div>
-  </div>
-</div>
-
-</div><!-- /content -->
-</div><!-- /main -->
-</div><!-- /shell -->
-
-<!-- ══════════════ MODAIS DE CAMPO ══════════════ -->
-
-<!-- DIESEL -->
-<div class="modal-bg" id="m-diesel">
-<div class="modal">
-  <div class="modal-hdr">
-    <div class="modal-title">⛽ Abastecimento de Diesel</div>
-    <button class="modal-close" onclick="closeM('m-diesel')">✕</button>
-  </div>
-  <div class="form-grid">
-    <div class="fg"><label>Data</label><input type="date" id="d-dt"></div>
-    <div class="fg"><label>Empresa</label><select id="d-emp"><option value="Master">Master</option><option value="Winechopp">Winechopp</option></select></div>
-    <div class="fg"><label>Placa</label><select id="d-placa"><option>ABC-1234</option><option>DEF-5678</option><option>GHI-9012</option><option>JKL-3456</option><option>MNO-7890</option><option>PQR-1234</option><option>STU-5678</option></select></div>
-    <div class="fg"><label>Motorista</label><input type="text" id="d-mot" placeholder="Nome do motorista"></div>
-    <div class="fg"><label>KM atual</label><input type="number" id="d-kma" oninput="calcD()"></div>
-    <div class="fg"><label>KM anterior</label><input type="number" id="d-kmb" oninput="calcD()"></div>
-    <div class="fg"><label>Litros</label><input type="number" id="d-lit" step="0.1" oninput="calcD()"></div>
-    <div class="fg"><label>Preço/litro R$</label><input type="number" id="d-prc" step="0.01" value="5.90" oninput="calcD()"></div>
-    <div class="fg"><label>Km/L calculado</label><div class="calc-f" id="d-kml">—</div></div>
-    <div class="fg"><label>Total R$</label><div class="calc-f" id="d-tot">—</div></div>
-    <div class="fg s2"><label>Observação</label><input type="text" id="d-obs" placeholder="Opcional"></div>
-  </div>
-  <div class="divider"></div>
-  <div class="btn-row">
-    <button class="btn btn-primary" onclick="submitDiesel()">✓ Registrar abastecimento</button>
-    <button class="btn btn-secondary" onclick="closeM('m-diesel')">Cancelar</button>
-  </div>
-</div>
-</div>
-
-<!-- ROTA -->
-<div class="modal-bg" id="m-rota">
-<div class="modal">
-  <div class="modal-hdr">
-    <div class="modal-title">→ Fechar Rota</div>
-    <button class="modal-close" onclick="closeM('m-rota')">✕</button>
-  </div>
-  <div class="form-grid">
-    <div class="fg"><label>Data</label><input type="date" id="r-dt"></div>
-    <div class="fg"><label>Hora saída</label><input type="time" id="r-hs"></div>
-    <div class="fg"><label>Placa</label><select id="r-placa"><option>ABC-1234</option><option>DEF-5678</option><option>GHI-9012</option><option>JKL-3456</option><option>MNO-7890</option><option>PQR-1234</option><option>STU-5678</option></select></div>
-    <div class="fg"><label>Motorista</label><input type="text" id="r-mot"></div>
-    <div class="fg s2"><label>Destino / Rota</label><textarea id="r-dest" style="min-height:56px" placeholder="PDVs e clientes visitados..."></textarea></div>
-    <div class="fg"><label>KM inicial</label><input type="number" id="r-kmi" oninput="calcR()"></div>
-    <div class="fg"><label>KM final</label><input type="number" id="r-kmf" oninput="calcR()"></div>
-    <div class="fg"><label>Hora chegada</label><input type="time" id="r-hc" oninput="calcR()"></div>
-    <div class="fg"><label>KM percorridos</label><div class="calc-f" id="r-km">—</div></div>
-    <div class="fg s2"><label>Ocorrências</label><input type="text" id="r-obs" placeholder="Atrasos, clientes ausentes..."></div>
-  </div>
-  <div class="divider"></div>
-  <div class="btn-row">
-    <button class="btn btn-primary" onclick="submitRota()">✓ Fechar rota</button>
-    <button class="btn btn-secondary" onclick="closeM('m-rota')">Cancelar</button>
-  </div>
-</div>
-</div>
-
-<!-- RETORNO VASILHAME -->
-<div class="modal-bg" id="m-retorno">
-<div class="modal">
-  <div class="modal-hdr">
-    <div class="modal-title">↓ Retorno de Barril</div>
-    <button class="modal-close" onclick="closeM('m-retorno')">✕</button>
-  </div>
-  <div class="form-grid">
-    <div class="fg"><label>Data</label><input type="date" id="v-dt"></div>
-    <div class="fg"><label>Empresa</label><select id="v-emp"><option value="Master">Master</option><option value="Winechopp">Winechopp</option><option value="PDV">PDV</option></select></div>
-    <div class="fg s2"><label>Cliente</label><input type="text" id="v-cli" placeholder="Nome do cliente"></div>
-    <div class="fg"><label>Produto / SKU</label><select id="v-sku"><option value="">— Selecione —</option></select></div>
-    <div class="fg"><label>Qtd retornada (barris)</label><input type="number" id="v-qtd" step="1" min="1"></div>
-    <div class="fg"><label>Motorista</label><input type="text" id="v-mot"></div>
-    <div class="fg"><label>Ref. pedido</label><input type="text" id="v-ref"></div>
-    <div class="fg s2"><label>Observação</label><input type="text" id="v-obs"></div>
-  </div>
-  <div class="divider"></div>
-  <div class="btn-row">
-    <button class="btn btn-primary" onclick="submitRetorno()">✓ Confirmar retorno</button>
-    <button class="btn btn-secondary" onclick="closeM('m-retorno')">Cancelar</button>
-  </div>
-</div>
-</div>
-
-<!-- ESTOQUE -->
-<div class="modal-bg" id="m-estoque">
-<div class="modal">
-  <div class="modal-hdr">
-    <div class="modal-title">▣ Entrada / Ajuste de Estoque</div>
-    <button class="modal-close" onclick="closeM('m-estoque')">✕</button>
-  </div>
-  <div class="form-grid">
-    <div class="fg"><label>Data</label><input type="date" id="e-dt"></div>
-    <div class="fg"><label>Tipo</label>
-      <select id="e-tipo">
-        <option value="Entrada Compra">Entrada (Compra)</option>
-        <option value="Ajuste Manual">Ajuste Manual</option>
-        <option value="Transferência">Transferência</option>
-        <option value="Perda / Quebra">Perda / Quebra</option>
-      </select>
-    </div>
-    <div class="fg"><label>Empresa</label><select id="e-emp"><option value="Master">Master</option><option value="Winechopp">Winechopp</option><option value="PDV">PDV</option></select></div>
-    <div class="fg"><label>SKU</label><select id="e-sku"><option value="">— Selecione —</option></select></div>
-    <div class="fg"><label>Qtd entrada (barris)</label><input type="number" id="e-ent" step="0.5" min="0"></div>
-    <div class="fg"><label>Qtd saída / ajuste</label><input type="number" id="e-sai" step="0.5" min="0"></div>
-    <div class="fg"><label>Preço unitário R$</label><input type="number" id="e-preco" step="0.01" min="0"></div>
-    <div class="fg"><label>Ref. NF / pedido</label><input type="text" id="e-ref"></div>
-    <div class="fg s2"><label>Observação</label><input type="text" id="e-obs"></div>
-  </div>
-  <div class="divider"></div>
-  <div class="btn-row">
-    <button class="btn btn-primary" onclick="submitEstoque()">✓ Registrar</button>
-    <button class="btn btn-secondary" onclick="closeM('m-estoque')">Cancelar</button>
-  </div>
-</div>
-</div>
-
-<!-- LANÇAMENTO FINANCEIRO (atalho na tela Custos) -->
-<div class="modal-bg" id="m-lancamento">
-<div class="modal">
-  <div class="modal-hdr">
-    <div class="modal-title">+ Lançamento Financeiro</div>
-    <button class="modal-close" onclick="closeM('m-lancamento')">✕</button>
-  </div>
-  <div class="alert-row alert-b" style="margin-bottom:14px">
-    <span class="alert-icon">ℹ</span>
-    <div style="font-size:11px">Os lançamentos principais são feitos diretamente na aba <strong>💰 Financeiro</strong> do Google Sheets. Use este formulário para lançamentos rápidos do dia a dia.</div>
-  </div>
-  <div class="form-grid">
-    <div class="fg"><label>Data</label><input type="date" id="fin-dt"></div>
-    <div class="fg"><label>Competência</label><input type="month" id="fin-comp"></div>
-    <div class="fg"><label>Empresa</label><select id="fin-emp"><option value="Master">Master</option><option value="Winechopp">Winechopp</option><option value="PDV">PDV</option></select></div>
-    <div class="fg"><label>Tipo</label>
-      <select id="fin-tipo">
-        <option value="Receita">Receita</option>
-        <option value="CMV">CMV</option>
-        <option value="Despesa" selected>Despesa</option>
-        <option value="Investimento">Investimento</option>
-      </select>
-    </div>
-    <div class="fg"><label>Categoria</label>
-      <select id="fin-cat">
-        <option>Diesel / Combustível</option><option>Manutenção de Frota</option>
-        <option>Folha de Pagamento</option><option>Encargos Sociais</option>
-        <option>Aluguel — CD / Galpão</option><option>Marketing Digital</option>
-        <option>Contabilidade</option><option>Despesas Bancárias</option>
-        <option>Impostos e Taxas</option><option>CMV — Barris</option>
-        <option>Outras Despesas Admin</option><option>Outros</option>
-      </select>
-    </div>
-    <div class="fg"><label>Centro de custo</label>
-      <select id="fin-cc">
-        <option>Distribuição</option><option>Dist. Menores</option>
-        <option>PDV / Choperia</option><option>Logística</option>
-        <option>RH</option><option>Marketing</option>
-        <option>Administrativo</option><option>Financeiro</option>
-      </select>
-    </div>
-    <div class="fg s2"><label>Histórico / Descrição</label><input type="text" id="fin-hist" placeholder="Descreva o lançamento..."></div>
-    <div class="fg"><label>Valor R$</label><input type="number" id="fin-val" step="0.01" min="0"></div>
-    <div class="fg"><label>Status</label>
-      <select id="fin-status">
-        <option value="Realizado">Realizado</option>
-        <option value="Previsto">Previsto</option>
-        <option value="Pendente">Pendente</option>
-      </select>
-    </div>
-  </div>
-  <div class="divider"></div>
-  <div class="btn-row">
-    <button class="btn btn-primary" onclick="submitLancamento()">✓ Gravar lançamento</button>
-    <button class="btn btn-secondary" onclick="closeM('m-lancamento')">Cancelar</button>
-  </div>
-</div>
-</div>
-
-<div class="toast-wrap" id="toast-wrap"></div>
 
 <script>
-// ══════════════════════════════════════════════════════════════
-// CONFIG
-// ══════════════════════════════════════════════════════════════
-const API_KEY = 'harden_api_url';
-let CFG = { url: localStorage.getItem(API_KEY) || 'https://script.google.com/macros/s/AKfycbxHlyMiLXkcCEhQKnzkDUsVMmGGZlTjWEJR9GCgIG2jJQwf2Bzl-6_nkIs7M1jENrql/exec' };
-let SKU_CACHE = [];
-let DASH_CACHE = null;
+// ──────────────────────────────────────────────────────────────
+// AUTOCOMPLETE
+// ──────────────────────────────────────────────────────────────
+function criarAC(inputEl, getOpcoes, onSelect, placeholder) {
+  inputEl.placeholder = placeholder || 'Digite para buscar…';
+  const wrap = inputEl.parentElement;
+  wrap.classList.add('ac-wrap');
+  const list = document.createElement('div');
+  list.className = 'ac-list';
+  wrap.appendChild(list);
 
-// ══════════════════════════════════════════════════════════════
-// API
-// ══════════════════════════════════════════════════════════════
-async function apiGet(ep, params = {}) {
-  const u = new URL(CFG.url);
-  u.searchParams.set('endpoint', ep);
-  const mes = document.getElementById('g-mes')?.value || '';
-  const emp = document.getElementById('g-emp')?.value || '';
-  // Só injeta filtro se tiver valor (string não vazia)
-  if (mes && mes !== '' && !params.mes) {
-    const mesP = mes.split('/');
-    params.mes = mesP[0].padStart(2,'0') + '/' + (mesP[1] || '');
+  let selIdx = -1;
+
+  inputEl.addEventListener('input', () => {
+    const q = inputEl.value.trim().toLowerCase();
+    if (!q) { list.classList.remove('open'); return; }
+    const opts = getOpcoes(q);
+    if (!opts.length) { list.classList.remove('open'); return; }
+    selIdx = -1;
+    list.innerHTML = opts.map((o,i) =>
+      `<div class="ac-item" data-idx="${i}" onclick="_acSelect(this)">
+        <span class="ac-item-name">${o.label}</span>
+        ${o.meta ? `<span class="ac-item-meta">${o.meta}</span>` : ''}
+      </div>`
+    ).join('');
+    list._opts = opts;
+    list._onSelect = onSelect;
+    list._input = inputEl;
+    list.classList.add('open');
+  });
+
+  inputEl.addEventListener('keydown', e => {
+    const items = list.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown')  { selIdx = Math.min(selIdx+1, items.length-1); }
+    else if (e.key === 'ArrowUp') { selIdx = Math.max(selIdx-1, 0); }
+    else if (e.key === 'Enter' && selIdx >= 0) { items[selIdx]?.click(); e.preventDefault(); }
+    else if (e.key === 'Escape') { list.classList.remove('open'); }
+    items.forEach((el,i) => el.classList.toggle('sel', i===selIdx));
+  });
+
+  document.addEventListener('click', e => {
+    if (!wrap.contains(e.target)) list.classList.remove('open');
+  });
+}
+
+function _acSelect(el) {
+  const list = el.closest('.ac-list');
+  const idx  = parseInt(el.dataset.idx);
+  const opt  = list._opts[idx];
+  const inp  = list._input;
+  inp.value  = opt.label;
+  inp.classList.add('ac-selected');
+  list.classList.remove('open');
+  if (list._onSelect) list._onSelect(opt);
+}
+
+function opsCli(q, tipoFiltro) {
+  return CLIENTES
+    .filter(c => {
+      const nomeOk = c.nome.toLowerCase().includes(q);
+      const tipoOk = !tipoFiltro || c.tipo === tipoFiltro;
+      return nomeOk && tipoOk;
+    })
+    .slice(0,8)
+    .map(c => ({label:c.nome, meta:c.tipo||'', value:c.id, tipo:c.tipo}));
+}
+
+function opsProd(q) {
+  return PRODUTOS
+    .filter(p => p.nome.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+    .slice(0,8)
+    .map(p => ({label:p.sku+' — '+p.nome, meta:p.cat, value:p.sku, ...p}));
+}
+
+// ──────────────────────────────────────────────────────────────
+// NAVEGAÇÃO
+// ──────────────────────────────────────────────────────────────
+let _telaAnterior = '';
+
+function mostrarTela(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('sc-'+id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function setPapel(papel) {
+  PAPEL = papel;
+  const labels = {motorista:'Motorista',patio:'Pátio',comercial:'Comercial',operacional:'Operacional'};
+  NOME = localStorage.getItem('harden_nome_'+papel) || '';
+  if (!NOME) {
+    NOME = prompt('Seu nome ('+ labels[papel] +'):') || papel;
+    localStorage.setItem('harden_nome_'+papel, NOME);
   }
-  if (emp && emp !== '' && !params.empresa) params.empresa = emp;
-  // Nunca envia parâmetro vazio — evita filtro acidental
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== null && v !== undefined && v !== '') u.searchParams.set(k, String(v));
-  });
-  const r = await fetch(u.toString());
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  return r.json();
+  document.getElementById('role-chip-txt').textContent = labels[papel]+' · '+NOME;
+  document.getElementById('role-chip').style.display = 'flex';
+  mostrarTela(papel);
+  _telaAnterior = papel;
+  if (papel==='patio')     carregarPendencias('patio');
+  if (papel==='comercial') carregarPendencias('comercial');
+  if (papel==='operacional') carregarSaldoTanque();
 }
 
-async function apiPost(acao, dados) {
-  const r = await fetch(CFG.url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ acao, dados }),
-  });
-  return r.json();
+function voltarRoles() {
+  PAPEL='';
+  document.getElementById('role-chip').style.display='none';
+  mostrarTela('roles');
 }
 
-// ══════════════════════════════════════════════════════════════
-// HELPERS
-// ══════════════════════════════════════════════════════════════
-const BRL  = v => 'R$\u00A0' + (parseFloat(v)||0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-const BRLK = v => { const n = parseFloat(v)||0; return n >= 1000000 ? 'R$\u00A0'+(n/1000000).toFixed(1)+'M' : n >= 1000 ? 'R$\u00A0'+(n/1000).toFixed(0)+'k' : BRL(n); };
-const NUM  = v => (parseFloat(v)||0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
-const PCT  = v => ((parseFloat(v)||0) * 100).toFixed(1) + '%';
-const td   = () => new Date().toISOString().split('T')[0];
-const mAtual = () => { const d = new Date(); return `${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; };
-
-function toast(msg, type = 'ok') {
-  const w = document.getElementById('toast-wrap');
-  const t = document.createElement('div');
-  t.className = `toast ${type}`;
-  t.innerHTML = `<span>${type === 'ok' ? '✓' : type === 'err' ? '✗' : 'ℹ'}</span> ${msg}`;
-  w.appendChild(t);
-  setTimeout(() => t.remove(), 3500);
+function abrirForm(tipo) {
+  _telaAnterior = PAPEL;
+  renderForm(tipo);
+  mostrarTela('form');
 }
 
-function setConn(ok) {
-  const d = document.getElementById('cDot'), t = document.getElementById('cTxt');
-  d.className = 'conn-dot ' + (ok ? 'on' : 'err');
-  t.textContent = ok ? 'Sheets conectado' : 'Sem conexão';
-}
+function voltarForm() { mostrarTela(_telaAnterior); }
 
-function openM(id) {
-  const m = document.getElementById(id);
-  m.classList.add('open');
-  m.querySelectorAll('input[type=date]').forEach(el => { if (!el.value) el.value = td(); });
-  m.querySelectorAll('input[type=time]').forEach(el => { if (!el.value) el.value = new Date().toTimeString().slice(0,5); });
-  m.querySelectorAll('input[type=month]').forEach(el => { if (!el.value) el.value = new Date().toISOString().slice(0,7); });
-}
-function closeM(id) { document.getElementById(id).classList.remove('open'); }
-document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
-
-function tagOp(o = '') {
-  const s = String(o || '').trim();
-  const sl = s.toLowerCase();
-  if (sl.includes('master')) return `<span class="tag tag-b">Master</span>`;
-  if (sl.includes('wine') || sl.includes('winechopp')) return `<span class="tag tag-p">Winechopp</span>`;
-  if (sl.includes('pdv')) return `<span class="tag tag-a">PDV</span>`;
-  if (s) return `<span class="tag tag-k">${s}</span>`;
-  return '';
-}
-function tagSeg(s) {
-  if (!s || s === 'undefined') return '<span class="tag tag-k">—</span>';
-  const m = { 'Campeão':'tag-g','Fiel':'tag-b','Novo':'tag-p','Regular':'tag-a','Em risco':'tag-r' };
-  return `<span class="tag ${m[s]||'tag-k'}">${s}</span>`;
-}
-function tagStatus(s) {
-  const m = { 'Realizado':'tag-g','Previsto':'tag-a','Pendente':'tag-r','Concluída':'tag-g','Em andamento':'tag-a' };
-  return `<span class="tag ${m[s]||'tag-k'}">${s||'—'}</span>`;
-}
-function emptyRow(cols, msg = 'Sem dados') {
-  return `<tr><td colspan="${cols}"><div class="empty-state"><div class="es-icon">—</div><p>${msg}</p></div></td></tr>`;
-}
-
-function trendBadge(curr, prev) {
-  if (!prev || prev === 0) return '';
-  const p = ((curr - prev) / prev) * 100;
-  const cls = p > 0 ? 'up' : p < 0 ? 'down' : 'flat';
-  const sign = p > 0 ? '▲' : p < 0 ? '▼' : '—';
-  return `<span class="trend ${cls}">${sign} ${Math.abs(p).toFixed(1)}%</span>`;
-}
-
-function sparkLine(vals, max) {
-  const mx = max || Math.max(...vals, 1);
-  return vals.map((v, i) => `<div class="spark-bar ${i === vals.length-1 ? 'last' : ''}" style="height:${Math.max(2, Math.round((v/mx)*100))}%"></div>`).join('');
-}
-
-function buildBarChart(meses, containerEl, keys, colors) {
-  // keys: array of {key, color, label}
-  if (!meses || meses.length === 0) { containerEl.innerHTML = '<div class="empty-state"><p>Sem dados</p></div>'; return; }
-  const totals = meses.map(m => keys.reduce((s, k) => s + (parseFloat(m[k.key])||0), 0));
-  const maxV   = Math.max(...totals, 1);
-  // Ordenar meses antes de renderizar
-  // Ordenar cronologicamente
-  const mesesOrdenados = [...meses].sort((a, b) => {
-    const pa = (a.mes||'00/0000').split('/'); const pb = (b.mes||'00/0000').split('/');
-    return (+pa[1]*100 + +pa[0]) - (+pb[1]*100 + +pb[0]);
-  });
-  const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  containerEl.innerHTML = mesesOrdenados.map(m => {
-    const total = keys.reduce((s, k) => s + (parseFloat(m[k.key])||0), 0);
-    const h     = Math.max(2, Math.round((total / maxV) * 118));
-    const segs  = keys.map(k => {
-      const val = parseFloat(m[k.key]) || 0;
-      const sh  = total > 0 ? Math.round((val / maxV) * 118) : 0;
-      return `<div class="bar-seg ${k.cls}" style="height:${sh}px" title="${k.label}: ${BRL(val)}"></div>`;
-    }).join('');
-    const parts = String(m.mes||'').split('/');
-    const lbl   = parts.length === 2 ? (MESES_PT[+parts[0]-1]||parts[0]) + '/' + parts[1].slice(-2) : m.mes||'';
-    return `<div class="bar-col">
-      <div class="bar-stack" style="height:${h}px">${segs}</div>
-      <div class="bar-lbl">${lbl}</div>
+// ──────────────────────────────────────────────────────────────
+// FORMULÁRIOS
+// ──────────────────────────────────────────────────────────────
+function renderForm(tipo) {
+  const hdr = document.getElementById('form-header');
+  const bdy = document.getElementById('form-body');
+  const defs = formDefs(tipo);
+  hdr.innerHTML = `
+    <div class="btn-back" onclick="voltarForm()">‹</div>
+    <div class="fh-info">
+      <div class="fh-title">${defs.titulo}</div>
+      <div class="fh-sub">${defs.sub}</div>
     </div>`;
-  }).join('');
-}
-
-function buildSimpleBarChart(items, containerEl, valKey, labelKey) {
-  if (!items || items.length === 0) { containerEl.innerHTML = '<div class="empty-state"><p>Sem dados</p></div>'; return; }
-  const maxV = Math.max(...items.map(i => parseFloat(i[valKey])||0), 1);
-  containerEl.innerHTML = items.map(m => {
-    const val = parseFloat(m[valKey]) || 0;
-    const h   = Math.max(2, Math.round((val / maxV) * 90));
-    return `<div class="bar-col">
-      <div class="bar-stack" style="height:${h}px"><div class="bar-seg single" style="height:${h}px" title="${BRL(val)}"></div></div>
-      <div class="bar-lbl">${String(m[labelKey]||'').slice(0,6)}</div>
+  bdy.innerHTML = defs.html + `
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-sub" onclick="handleSub()">${defs.botao}</button>
+      <button class="btn btn-secondary" onclick="voltarForm()">Cancelar</button>
     </div>`;
-  }).join('');
+  _formSubmit = defs.submit;
+  _itemN = 0;
+  if (defs.init) setTimeout(defs.init, 0);
 }
 
-function populateMeses() {
-  const sel = document.getElementById('g-mes');
-  if (!sel) return;
-  const opts = ['<option value="">Todo o período</option>'];
-  // Gera de 2024 a ano atual+1
-  const anoAtual = new Date().getFullYear();
-  for (let y = 2025; y <= anoAtual + 1; y++)
-    for (let m = 1; m <= 12; m++)
-      opts.push(`<option value="${String(m).padStart(2,'0')}/${y}">${String(m).padStart(2,'0')}/${y}</option>`);
-  sel.innerHTML = opts.join('');
-  sel.value = ''; // Padrão: todo o período
-}
+function formDefs(tipo) {
+  switch(tipo) {
 
-async function loadSkuCache() {
-  try {
-    const r = await apiGet('depara', {});
-    SKU_CACHE = r.dados || [];
-    ['v-sku', 'e-sku'].forEach(id => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.innerHTML = '<option value="">— Selecione o SKU —</option>';
-      SKU_CACHE.forEach(d => {
-        const o = document.createElement('option');
-        o.value = d.sku;
-        o.textContent = d.sku + (d.nome_master_bling ? ' — ' + d.nome_master_bling : '');
-        el.appendChild(o);
+  // ── RETORNO VASILHAME (motorista) ──────────────────────
+  case 'retorno-motorista': return {
+    titulo:'Retorno de Vasilhame', sub:'Motorista — coletado em rota',
+    botao:'Registrar retorno',
+    html:`
+      <div class="info-box">📍 O pátio confirma ao chegar no CD.</div>
+      <div class="fg">
+        <label><span class="req">*</span> Tipo de cliente</label>
+        ${segmentedTipo('tipo-cli-rm')}
+      </div>
+      <div class="fg"><label><span class="req">*</span> Cliente</label>
+        <div><input id="cli-rm" type="text" autocomplete="off"></div>
+      </div>
+      <div class="fg"><label>Operação</label>
+        ${selectEmpresa('emp-rm')}
+      </div>
+      <div class="slabel">Itens coletados</div>
+      <div class="items-wrap" id="itens-rm"></div>
+      <button class="btn-add" onclick="addItem('itens-rm')">+ Adicionar produto</button>
+      <div class="fg"><label>Observação</label>
+        <textarea id="obs-rm" placeholder="Ex: cliente pediu conferência..."></textarea>
+      </div>`,
+    init: () => {
+      initSeg('tipo-cli-rm');
+      criarAC(document.getElementById('cli-rm'), q => opsCli(q), opt => {
+        document.getElementById('cli-rm')._id = opt.value;
       });
-    });
-  } catch(e) {}
-}
+      addItem('itens-rm');
+    },
+    submit: submitRetornoMotorista,
+  };
 
-// ══════════════════════════════════════════════════════════════
-// NAVIGATION
-// ══════════════════════════════════════════════════════════════
-const PAGE_META = {
-  dashboard:  { title: 'Dashboard',          sub: 'Visão geral da operação', load: loadDashboard },
-  dre:        { title: 'DRE & Fluxo de Caixa', sub: 'Resultado gerencial por período', load: loadDRE },
-  vendas:     { title: 'Vendas',             sub: 'Análise de faturamento por canal', load: loadVendas },
-  clientes:   { title: 'Clientes',           sub: 'Performance e segmentação RFM', load: loadClientes },
-  custos:     { title: 'Centro de Custos',   sub: 'Despesas por área operacional', load: loadCustos },
-  estoque:    { title: 'Estoque',            sub: 'Saldo de barris e movimentações', load: loadEstoque },
-  vasilhames: { title: 'Vasilhames',         sub: 'Barris em campo por cliente', load: loadVasilhames },
-  mix:        { title: 'Mix de Produtos',    sub: 'Volume e receita por SKU', load: loadMix },
-  diesel:     { title: 'Diesel',             sub: 'Abastecimento da frota', load: loadDiesel },
-  rotas:      { title: 'Rotas',              sub: 'Km e entregas realizados', load: loadRotas },
-  retorno:    { title: 'Retorno de Barril',  sub: 'Vasilhames devolvidos pelos clientes', load: loadRetornos },
-  config:     { title: 'Configurações',      sub: 'Conexão e parâmetros do sistema', load: null },
-};
-
-function goto(p) {
-  document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(x => x.classList.remove('active'));
-  const pg = document.getElementById('page-' + p);
-  if (!pg) return;
-  pg.classList.add('active');
-  document.getElementById('nb-' + p)?.classList.add('active');
-  const meta = PAGE_META[p] || {};
-  document.getElementById('tb-title').textContent = meta.title || p;
-  document.getElementById('tb-sub').textContent   = meta.sub   || '';
-  if (meta.load) meta.load();
-}
-
-function limparFiltros() {
-  document.getElementById('g-mes').value = '';
-  document.getElementById('g-emp').value = '';
-  reloadPage();
-}
-
-function reloadPage() {
-  const active = document.querySelector('.nav-btn.active');
-  if (active) {
-    const id = active.id.replace('nb-', '');
-    const meta = PAGE_META[id];
-    if (meta?.load) meta.load();
-  }
-}
-
-// Atualizar label do topbar com filtro ativo
-function updateTopbarLabel() {
-  const mes = document.getElementById('g-mes')?.value || '';
-  const emp = document.getElementById('g-emp')?.value || '';
-  const parts = mes.split('/');
-  const MESES_LABEL = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  const mesLabel = mes ? (MESES_LABEL[+parts[0]-1]||parts[0]) + '/' + parts[1] : 'Todo o período';
-  const empLabel = emp || 'Todas as operações';
-  document.getElementById('tb-sub').textContent = mesLabel + ' · ' + empLabel;
-}
-
-// ══════════════════════════════════════════════════════════════
-// DASHBOARD
-// ══════════════════════════════════════════════════════════════
-async function loadDashboard() {
-  document.getElementById('dash-loading').style.display = 'flex';
-  document.getElementById('dash-loading').innerHTML = '<div class="spin"></div> Buscando dados...';
-  document.getElementById('dash-body').style.display = 'none';
-  try {
-    // Uma única chamada — Apps Script processa tudo server-side
-    const r = await apiGet('dashboard');
-    if (!r.ok) throw new Error(r.erro || 'Resposta inválida do servidor');
-    const d = r.dados;
-    if (!d) throw new Error('Sem dados retornados');
-    DASH_CACHE = d;
-    setConn(true);
-
-    // Summary panel
-    document.getElementById('sum-panel').innerHTML = `
-      <div class="sum-item"><div class="sum-label">Receita Total</div><div class="sum-val">${BRLK(d.receita_total)}</div><div class="sum-sub">${NUM(d.pedidos_total)} pedidos</div></div>
-      <div class="sum-divider"></div>
-      <div class="sum-item"><div class="sum-label">Barris Vendidos</div><div class="sum-val">${NUM(d.barris_total)}</div><div class="sum-sub">${NUM(d.litros_total)} litros</div></div>
-      <div class="sum-divider"></div>
-      <div class="sum-item"><div class="sum-label">Clientes Ativos</div><div class="sum-val">${d.clientes_ativos}</div><div class="sum-sub">base ativa</div></div>
-      <div class="sum-divider"></div>
-      <div class="sum-item"><div class="sum-label">Ticket Médio</div><div class="sum-val">${BRL(d.ticket_medio)}</div><div class="sum-sub">por pedido</div></div>
-      <div class="sum-divider"></div>
-      <div class="sum-item"><div class="sum-label">Vasilhames Pendentes</div><div class="sum-val">${NUM(d.vasilhames_pendentes)}</div><div class="sum-sub">barris em campo</div></div>`;
-
-    // KPIs com sparkline por mês
-    const meses = (d.receita_por_mes || []).sort((a, b) => {
-      const pa = (a.mes||'00/0000').split('/'); const pb = (b.mes||'00/0000').split('/');
-      return (+pa[1]*100 + +pa[0]) - (+pb[1]*100 + +pb[0]);
-    });
-    const vals  = meses.map(m => m.valor);
-    const mesAtual  = meses.slice(-1)[0]?.valor || 0;
-    const mesAnterior = meses.slice(-2, -1)[0]?.valor || 0;
-    document.getElementById('kpi-grid').innerHTML = [
-      { l:'Receita este mês', v:BRL(mesAtual), sub:trendBadge(mesAtual, mesAnterior), spark:vals, cls:'' },
-      { l:'Receita acum. Master',  v:BRLK((d.receita_por_mes||[]).reduce((s,m)=>s+(m.master||0),0)), sub:'operação Master', spark:meses.map(m=>m.master||0), cls:'blue' },
-      { l:'Receita acum. Wine',    v:BRLK((d.receita_por_mes||[]).reduce((s,m)=>s+(m.wine||0),0)),   sub:'operação Wine',   spark:meses.map(m=>m.wine||0),   cls:'purple' },
-      { l:'Receita acum. PDV',     v:BRLK((d.receita_por_mes||[]).reduce((s,m)=>s+(m.pdv||0),0)),    sub:'operação PDV',    spark:meses.map(m=>m.pdv||0),    cls:'amber' },
-    ].map(k => `<div class="kpi ${k.cls}">
-      <div class="kpi-label">${k.l}</div>
-      <div class="kpi-val">${k.v}</div>
-      <div class="kpi-delta">${k.sub}</div>
-      <div class="kpi-spark">${sparkLine(k.spark.slice(-8), Math.max(...k.spark, 1))}</div>
-    </div>`).join('');
-
-    // Chart
-    buildBarChart(meses, document.getElementById('ch-receita'),
-      [{key:'master',cls:'master',label:'Master'},{key:'wine',cls:'wine',label:'Wine'},{key:'pdv',cls:'pdv',label:'PDV'}], null);
-    document.getElementById('ch-label').textContent = document.getElementById('g-emp').value || 'todas as operações';
-
-    // RFM
-    const seg = d.segmentacao_clientes || {};
-    const segCfg = {
-      'Campeão':  { bg:'var(--gl)',  fg:'var(--gd)' },
-      'Fiel':     { bg:'var(--bl)',  fg:'var(--b)'  },
-      'Novo':     { bg:'var(--pl)',  fg:'var(--p)'  },
-      'Regular':  { bg:'var(--al)',  fg:'var(--a)'  },
-      'Em risco': { bg:'var(--rl)',  fg:'var(--r)'  },
-    };
-    const totalCli = Object.values(seg).reduce((s,n)=>s+n,0) || 1;
-    document.getElementById('rfm-grid').innerHTML = Object.entries(seg).map(([s,n]) => {
-      const c = segCfg[s] || { bg:'var(--bg3)', fg:'var(--ink3)' };
-      return `<div class="rfm-card" style="background:${c.bg}">
-        <div class="rfm-n" style="color:${c.fg}">${n}</div>
-        <div class="rfm-l" style="color:${c.fg}">${s}</div>
-        <div class="rfm-p">${((n/totalCli)*100).toFixed(0)}%</div>
-      </div>`;
-    }).join('');
-
-    // Alerts
-    const alertsHtml = [];
-    if ((d.alertas_vasilhames||[]).length > 0) {
-      alertsHtml.push(`<div class="alert-row alert-a"><span class="alert-icon">⚠</span><div><strong>${d.alertas_vasilhames.length} clientes</strong> com mais de 10 barris pendentes: ${d.alertas_vasilhames.slice(0,3).map(v=>`<strong>${v.cliente}</strong> (${v.pendentes})`).join(', ')}${d.alertas_vasilhames.length>3?'...':''}</div></div>`);
-    }
-    if ((d.alertas_estoque||[]).length > 0) {
-      alertsHtml.push(`<div class="alert-row alert-r"><span class="alert-icon">▣</span><div><strong>${d.alertas_estoque.length} SKUs</strong> com estoque crítico (≤5 barris): ${d.alertas_estoque.slice(0,3).map(e=>`<strong>${e.sku}</strong>`).join(', ')}</div></div>`);
-    }
-    document.getElementById('dash-alerts').innerHTML = alertsHtml.join('');
-
-    // Nav pill
-    if ((d.alertas_vasilhames||[]).length > 0) {
-      const pill = document.getElementById('vas-alert-pill');
-      if (pill) { pill.style.display = ''; pill.textContent = d.alertas_vasilhames.length; }
-    }
-
-    // Top clients
-    document.getElementById('top-cli-tbody').innerHTML = (d.top_clientes||[]).map((c,i) => `<tr>
-      <td class="td-c mono" style="color:var(--ink3);font-size:11px">${i+1}</td>
-      <td class="td-b">${c.cliente||'—'}</td>
-      <td>${tagOp(c.empresa||c.origem)}</td>
-      <td class="td-r td-g">${BRL(c.receita)}</td>
-      <td class="td-r">${c.pedidos||0}</td>
-      <td>${c.segmento && c.segmento !== 'undefined' ? tagSeg(c.segmento) : '<span class="tag tag-k">—</span>'}</td>
-    </tr>`).join('') || emptyRow(6);
-
-    // Top products
-    const allProds  = d.top_produtos || [];
-    const totalRec  = allProds.reduce((s,p)=>s+(parseFloat(p.receita)||0),0)||1;
-    document.getElementById('top-prod-tbody').innerHTML = allProds.map((p,i) => `<tr>
-      <td class="td-c mono" style="color:var(--ink3);font-size:11px">${i+1}</td>
-      <td class="td-b">${p.produto||p.sku||'—'}</td>
-      <td class="td-r">${NUM(p.barris)}</td>
-      <td class="td-r td-g">${BRL(p.receita)}</td>
-      <td class="td-r"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
-        <div style="width:50px"><div class="prog-wrap"><div class="prog-fill" style="width:${Math.min(100,(p.receita/totalRec)*100)}%"></div></div></div>
-        <span style="font-size:10px;color:var(--ink3);min-width:35px;text-align:right">${((p.receita/totalRec)*100).toFixed(1)}%</span>
-      </div></td>
-    </tr>`).join('') || emptyRow(5);
-
-    document.getElementById('dash-loading').style.display = 'none';
-    document.getElementById('dash-body').style.display = 'block';
-  } catch(e) {
-    setConn(false);
-    document.getElementById('dash-loading').innerHTML = `<div class="empty-state"><div class="es-icon">⚠</div>
-      <p style="color:var(--r);margin-bottom:8px"><strong>Erro ao conectar ao Sheets</strong></p>
-      <p style="font-size:11px;color:var(--ink3);margin-bottom:8px">${e.message||e}</p>
-      <p style="font-size:11px;color:var(--ink3)">Verifique: 1) URL do Apps Script em Configurações está correta e termina em /exec<br>2) A implantação está como "Qualquer pessoa"<br>3) Você executou inicializarTudo() no Apps Script</p>
-    </div>`;
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// DRE
-// ══════════════════════════════════════════════════════════════
-async function loadDRE() {
-  document.getElementById('dre-body').innerHTML = '<div class="spin-wrap"><div class="spin"></div></div>';
-  document.getElementById('fc-body').innerHTML  = '<div class="spin-wrap"><div class="spin"></div></div>';
-  try {
-    const [dreR, fcR] = await Promise.all([apiGet('dre'), apiGet('fluxo_caixa')]);
-    const d = dreR.dados;
-    const mes = document.getElementById('g-mes')?.value || 'todo período';
-    document.getElementById('dre-badge').textContent = mes + (document.getElementById('g-emp')?.value ? ' · ' + document.getElementById('g-emp').value : '');
-
-    const recLiq = d.receita_liquida || 1;
-    const clrVal = v => v >= 0 ? 'var(--g)' : 'var(--r)';
-    const fmtV   = v => v < 0 ? `<span style="color:var(--r)">(${BRL(Math.abs(v))})</span>` : `<span style="color:${v>0?'var(--g)':'var(--ink3)'}">${BRL(v)}</span>`;
-    const pctBar = (v, max) => {
-      const p = max > 0 ? Math.min(100, Math.abs(v/max)*100) : 0;
-      const c = v >= 0 ? 'var(--g)' : 'var(--r)';
-      return `<div class="dre-bar"><div class="dre-bar-fill" style="width:${p.toFixed(1)}%;background:${c}"></div></div>`;
-    };
-
-    const lines = [
-      { s: 'Receita' },
-      { l:'(+) Receita bruta de vendas',     v: d.receita_bruta,          pct: recLiq > 0 ? d.receita_bruta / recLiq : 0 },
-      { l:'(-) Deduções / devoluções',        v: -d.deducoes,              pct: recLiq > 0 ? -d.deducoes / recLiq : 0 },
-      { l:'(=) Receita líquida',              v: d.receita_liquida,        pct: 1, total: true },
-      { s: 'CMV' },
-      { l:'(-) Custo de mercadorias (CMV)',   v: -d.cmv,                   pct: recLiq > 0 ? -d.cmv / recLiq : 0 },
-      { l:'(=) Lucro bruto',                  v: d.lucro_bruto,            pct: recLiq > 0 ? d.lucro_bruto / recLiq : 0, total: true },
-      { s: 'Despesas operacionais' },
-      { l:'  Pessoal / folha / encargos',     v: -d.despesas_pessoal,      pct: recLiq > 0 ? -d.despesas_pessoal / recLiq : 0 },
-      { l:'  Logística / diesel / frete',     v: -d.despesas_logistica,    pct: recLiq > 0 ? -d.despesas_logistica / recLiq : 0 },
-      { l:'  Aluguel / infraestrutura',       v: -d.despesas_admin,        pct: recLiq > 0 ? -d.despesas_admin / recLiq : 0 },
-      { l:'  Marketing / comercial',          v: -d.despesas_marketing,    pct: recLiq > 0 ? -d.despesas_marketing / recLiq : 0 },
-      { l:'  Financeiro / banco / juros',     v: -d.despesas_financeiras,  pct: recLiq > 0 ? -d.despesas_financeiras / recLiq : 0 },
-      { l:'  Outras despesas',                v: -d.outras_despesas,       pct: recLiq > 0 ? -d.outras_despesas / recLiq : 0 },
-      { l:'(=) Total despesas',               v: -d.total_despesas,        pct: recLiq > 0 ? -d.total_despesas / recLiq : 0, total: d.total_despesas <= 0 },
-      { l:'(=) EBITDA',                       v: d.ebitda,                 pct: recLiq > 0 ? d.ebitda / recLiq : 0, total: true },
-      { s: 'Resultado' },
-      { l:'(-) Depreciação / amortização',    v: -d.depreciacao,           pct: recLiq > 0 ? -d.depreciacao / recLiq : 0 },
-      { l:'(=) Resultado operacional (EBIT)', v: d.ebit,                   pct: recLiq > 0 ? d.ebit / recLiq : 0, total: true },
-    ];
-
-    document.getElementById('dre-body').innerHTML = lines.map(ln => {
-      if (ln.s) return `<div class="dre-row section"><div class="dre-label">${ln.s}</div></div>`;
-      const totCls = ln.v < 0 ? 'total-neg' : (ln.total ? 'total' : '');
-      return `<div class="dre-row ${totCls}">
-        <div class="dre-label">${ln.l}</div>
-        <div class="dre-val">${fmtV(ln.v)}</div>
-        <div class="dre-pct">${ln.pct !== undefined ? ((ln.pct||0)*100).toFixed(1)+'%' : ''}</div>
-        ${pctBar(ln.v, d.receita_liquida)}
-      </div>`;
-    }).join('');
-
-    // Margens
-    document.getElementById('margens-body').innerHTML = [
-      { l: 'Margem bruta',     v: d.margem_bruta,   color: (d.margem_bruta||0) > 0.3 ? '' : 'amber' },
-      { l: 'Margem EBITDA',    v: d.margem_ebitda,  color: (d.margem_ebitda||0) > 0.1 ? '' : (d.margem_ebitda||0) > 0 ? 'amber' : 'red' },
-    ].map(m => {
-      const pct = ((m.v||0)*100);
-      return `<div style="margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <span style="font-size:12px;color:var(--ink2)">${m.l}</span>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;color:${pct>0?'var(--g)':'var(--r)'}">${pct.toFixed(1)}%</span>
-        </div>
-        <div class="prog-wrap"><div class="prog-fill ${m.color}" style="width:${Math.min(100,Math.max(0,pct))}%"></div></div>
-      </div>`;
-    }).join('');
-
-    // Operação split
-    const opData = [
-      { l:'Master', v: (fcR.dados||[]).reduce((s,f)=>s+(parseFloat(f.entradas)||0),0), cls:'' },
-    ];
-    document.getElementById('op-split-body').innerHTML = `<div style="font-size:12px;color:var(--ink3);padding:8px 0">Dados de split por operação disponíveis com filtro de empresa selecionado.</div>`;
-
-    // Fluxo de caixa
-    const fc = fcR.dados || [];
-    document.getElementById('fc-body').innerHTML = `<table>
-      <thead><tr><th>Mês</th><th class="td-r">Entradas</th><th class="td-r">Saídas</th><th class="td-r">Saldo</th><th class="td-r">Acumulado</th></tr></thead>
-      <tbody>${fc.map(f => `<tr>
-        <td class="td-b mono" style="font-size:11px">${f.mes}</td>
-        <td class="td-r td-g">${BRL(f.entradas)}</td>
-        <td class="td-r td-r2">${BRL(f.saidas)}</td>
-        <td class="td-r" style="color:${f.saldo>=0?'var(--g)':'var(--r)'};font-weight:600;font-family:'IBM Plex Mono',monospace">${BRL(f.saldo)}</td>
-        <td class="td-r" style="color:${f.acumulado>=0?'var(--ink3)':'var(--r)'};font-family:'IBM Plex Mono',monospace;font-size:11px">${BRL(f.acumulado)}</td>
-      </tr>`).join('') || emptyRow(5)}</tbody>
-    </table>`;
-  } catch(e) { console.error(e); }
-}
-
-// ══════════════════════════════════════════════════════════════
-// VENDAS
-// ══════════════════════════════════════════════════════════════
-async function loadVendas() {
-  const q = document.getElementById('vd-busca')?.value || '';
-  try {
-    // 2 chamadas: produtos agregados + histórico
-    const [pR, hR] = await Promise.all([
-      apiGet('vendas_produto'),
-      apiGet('vendas', { cliente: q, limit: 150 }),
-    ]);
-    const prods = pR.dados || [], hist = hR.dados || [];
-    // Meses derivados do histórico client-side (evita 3a chamada)
-    const recMesMap = {};
-    hist.forEach(h => {
-      // Derivar mes SEMPRE da data — campo mes pode estar incorreto
-      let m = '';
-      if (h.data) {
-        const parts = String(h.data).split('/');
-        if (parts.length === 3) m = parts[1].padStart(2,'0') + '/' + parts[2];
-      }
-      if (!m) return; // sem data, pula
-      if (!recMesMap[m]) recMesMap[m] = { mes: m, master: 0, wine: 0, pdv: 0, valor: 0 };
-      const val = parseFloat(h.valor_total)||0;
-      const emp = String(h.empresa||h.origem||'').toLowerCase();
-      recMesMap[m].valor += val;
-      if      (emp.includes('master')) recMesMap[m].master += val;
-      else if (emp.includes('wine'))   recMesMap[m].wine   += val;
-      else if (emp.includes('pdv'))    recMesMap[m].pdv    += val;
-      else recMesMap[m].master += val;
-    });
-    // Ordenar cronologicamente
-    const meses = Object.values(recMesMap).sort((a, b) => {
-      const pa = a.mes.split('/'); const pb = b.mes.split('/');
-      return (+pa[1]*100 + +pa[0]) - (+pb[1]*100 + +pb[0]);
-    });
-    const totR  = prods.reduce((s,p) => s+(parseFloat(p.receita)||0), 0);
-    const totL  = prods.reduce((s,p) => s+(parseFloat(p.litros)||0), 0);
-    const totB  = prods.reduce((s,p) => s+(parseFloat(p.barris)||0), 0);
-    const totP  = new Set(hist.map(h => h.pedido)).size;
-
-    document.getElementById('vd-kpis').innerHTML = [
-      { l:'Receita', v:BRLK(totR), cls:'' },
-      { l:'Litros',  v:NUM(totL)+' L', cls:'' },
-      { l:'Barris',  v:NUM(totB), cls:'' },
-      { l:'Pedidos', v:totP, cls:'blue' },
-      { l:'Ticket médio', v:BRL(totP>0?totR/totP:0), cls:'amber' },
-    ].map(k=>`<div class="kpi ${k.cls}"><div class="kpi-label">${k.l}</div><div class="kpi-val">${k.v}</div></div>`).join('');
-
-    document.getElementById('vd-plabel').textContent = document.getElementById('g-mes')?.value || 'todo período';
-    document.getElementById('vd-period-label').textContent = document.getElementById('g-mes')?.value || 'acumulado';
-
-    // Chart
-    buildBarChart(meses, document.getElementById('vd-chart'),
-      [{key:'master',cls:'master',label:'Master'},{key:'wine',cls:'wine',label:'Wine'},{key:'pdv',cls:'pdv',label:'PDV'}], null);
-
-    // Operação donut-text
-    const opSplit = {};
-    hist.forEach(h => {
-      const op = h.origem || h.empresa || 'Outro';
-      opSplit[op] = (opSplit[op] || 0) + (parseFloat(h.valor_total) || 0);
-    });
-    document.getElementById('vd-op-split').innerHTML = Object.entries(opSplit).sort((a,b)=>b[1]-a[1]).map(([op, val]) => {
-      const pct = totR > 0 ? (val / totR) * 100 : 0;
-      return `<div style="margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          ${tagOp(op)}
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500">${BRL(val)} <span style="color:var(--ink3);font-size:10px">${pct.toFixed(1)}%</span></span>
-        </div>
-        <div class="prog-wrap"><div class="prog-fill blue" style="width:${pct.toFixed(1)}%"></div></div>
-      </div>`;
-    }).join('') || '<p style="font-size:12px;color:var(--ink3)">Sem dados</p>';
-
-    // Products table
-    document.getElementById('vd-prod-tbody').innerHTML = prods.map(p => `<tr>
-      <td class="td-b mono" style="font-size:11px">${p.sku||'—'}</td>
-      <td>${p.produto||'—'}</td>
-      <td class="td-r">${NUM(p.barris)}</td>
-      <td class="td-r">${NUM(p.litros)}</td>
-      <td class="td-r td-g">${BRL(p.receita)}</td>
-      <td class="td-r">
-        <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end">
-          <div style="width:40px"><div class="prog-wrap"><div class="prog-fill" style="width:${totR>0?Math.min(100,(p.receita/totR)*100):0}%"></div></div></div>
-          <span style="font-size:10px;color:var(--ink3)">${totR>0?((p.receita/totR)*100).toFixed(1):'0'}%</span>
-        </div>
-      </td>
-    </tr>`).join('') || emptyRow(6);
-
-    document.getElementById('vd-hist-tbody').innerHTML = hist.slice(0,100).map(h => `<tr>
-      <td class="mono" style="font-size:10px;color:var(--ink3)">${h.data||'—'}</td>
-      <td class="td-b">${h.pedido||'—'}</td>
-      <td>${tagOp(h.origem)}</td>
-      <td>${h.cliente||'—'}</td>
-      <td>${h.produto||h.sku||'—'}</td>
-      <td class="td-r">${NUM(h.qtd_barris)}</td>
-      <td class="td-r td-g">${BRL(h.valor_total)}</td>
-    </tr>`).join('') || emptyRow(7);
-  } catch(e) { console.error(e); }
-}
-
-// ══════════════════════════════════════════════════════════════
-// CLIENTES
-// ══════════════════════════════════════════════════════════════
-async function loadClientes() {
-  const seg   = document.getElementById('cli-seg')?.value || '';
-  const busca = document.getElementById('cli-busca')?.value?.toLowerCase() || '';
-  try {
-    const r = await apiGet('clientes_rfm');
-    let all = r.dados || [];
-    const segCount = {};
-    all.forEach(c => { segCount[c.segmento] = (segCount[c.segmento]||0)+1; });
-    if (seg)   all = all.filter(c => c.segmento === seg);
-    if (busca) all = all.filter(c => String(c.cliente||'').toLowerCase().includes(busca));
-
-    const totR = all.reduce((s,c) => s+(parseFloat(c.receita)||0), 0);
-
-    document.getElementById('cli-kpis').innerHTML = [
-      { l:'Total clientes',  v: r.dados?.length||0, cls:'' },
-      { l:'Campeões',        v: segCount['Campeão']||0, cls:'' },
-      { l:'Fiéis',           v: segCount['Fiel']||0, cls:'blue' },
-      { l:'Novos',           v: segCount['Novo']||0, cls:'purple' },
-      { l:'Em risco',        v: segCount['Em risco']||0, cls:'red' },
-      { l:'Receita total',   v: BRLK(totR), cls:'' },
-    ].map(k=>`<div class="kpi ${k.cls}"><div class="kpi-label">${k.l}</div><div class="kpi-val">${k.v}</div></div>`).join('');
-
-    // RFM grid
-    const segCfg = {
-      'Campeão':  { bg:'var(--gl)',fg:'var(--gd)',desc:'Alto valor, compra frequente e recente' },
-      'Fiel':     { bg:'var(--bl)',fg:'var(--b)', desc:'Compra frequente, alguma inatividade' },
-      'Novo':     { bg:'var(--pl)',fg:'var(--p)', desc:'Poucos pedidos, potencial de crescimento' },
-      'Regular':  { bg:'var(--al)',fg:'var(--a)', desc:'Compras esporádicas, ticket variável' },
-      'Em risco': { bg:'var(--rl)',fg:'var(--r)', desc:'Sem comprar há +60 dias — acionar agora' },
-    };
-    const totalC = r.dados?.length || 1;
-    document.getElementById('cli-rfm-grid').innerHTML = Object.entries(segCfg).map(([s, cfg]) => {
-      const n = segCount[s] || 0;
-      return `<div class="rfm-card" style="background:${cfg.bg};cursor:pointer" onclick="document.getElementById('cli-seg').value='${s}';loadClientes()">
-        <div class="rfm-n" style="color:${cfg.fg}">${n}</div>
-        <div class="rfm-l" style="color:${cfg.fg}">${s}</div>
-        <div class="rfm-p">${((n/totalC)*100).toFixed(0)}% · ${cfg.desc}</div>
-      </div>`;
-    }).join('');
-
-    // Table
-    document.getElementById('cli-tbody').innerHTML = all.map((c, i) => `<tr>
-      <td class="td-c mono" style="font-size:10px;color:var(--ink3)">${i+1}</td>
-      <td class="td-b">${c.cliente||'—'}</td>
-      <td>${tagOp(c.origem)}</td>
-      <td class="td-r td-g">${BRL(c.receita)}</td>
-      <td class="td-r">${c.pedidos||0}</td>
-      <td class="td-r">${BRL(c.ticket_medio)}</td>
-      <td class="td-r mono" style="font-size:10px;color:${(c.recencia_dias||999)>60?'var(--r)':'var(--ink3)'}">${c.recencia_dias||0}d</td>
-      <td>${tagSeg(c.segmento)}</td>
-    </tr>`).join('') || emptyRow(8);
-
-    // At risk panel
-    const atRisk = (r.dados||[]).filter(c => c.segmento === 'Em risco').slice(0, 5);
-    document.getElementById('cli-risk-body').innerHTML = atRisk.map(c => `
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.cliente||'—'}</div>
-          <div style="font-size:11px;color:var(--ink3)">Último pedido: ${c.ultima||'?'} · ${c.pedidos} pedidos · ${BRL(c.receita)}</div>
-        </div>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--r);font-weight:500">${c.recencia_dias}d</span>
-      </div>`).join('') || '<div class="empty-state"><p>Nenhum cliente em risco</p></div>';
-
-    // Growth chart (clientes ativos por mês - simplificado)
-    document.getElementById('cli-chart').innerHTML = '<div style="font-size:11px;color:var(--ink3);padding:8px 0">Evolução de base ativa por mês disponível com dados de período filtrado.</div>';
-  } catch(e) { console.error(e); }
-}
-
-// ══════════════════════════════════════════════════════════════
-// CUSTOS
-// ══════════════════════════════════════════════════════════════
-async function loadCustos() {
-  try {
-    const r = await apiGet('centro_custos');
-    const ccs = r.dados || [];
-    const totCC = ccs.reduce((s, c) => s + (parseFloat(c.total)||0), 0);
-
-    document.getElementById('cc-kpis').innerHTML = [
-      { l:'Total despesas', v:BRLK(totCC), cls:'red' },
-      { l:'Centros ativos', v:ccs.length, cls:'' },
-      { l:'Maior centro',   v:ccs[0]?.centro_custo||'—', cls:'amber' },
-    ].map(k=>`<div class="kpi ${k.cls}"><div class="kpi-label">${k.l}</div><div class="kpi-val" style="font-size:${k.v.length>8?'16px':'24px'}">${k.v}</div></div>`).join('');
-
-    // CC bars
-    document.getElementById('cc-bars-body').innerHTML = ccs.map(c => {
-      const pct = totCC > 0 ? (c.total / totCC) * 100 : 0;
-      return `<div style="margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <span style="font-size:12.5px;font-weight:500;color:var(--ink)">${c.centro_custo}</span>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">${BRL(c.total)} <span style="color:var(--ink3);font-size:10px">${pct.toFixed(1)}%</span></span>
-        </div>
-        <div class="prog-wrap"><div class="prog-fill amber" style="width:${pct.toFixed(1)}%"></div></div>
-      </div>`;
-    }).join('') || '<div class="empty-state"><p>Sem lançamentos no período</p></div>';
-
-    // Categories
-    const catMap = {};
-    ccs.forEach(c => {
-      (c.lancamentos||[]).forEach(l => {
-        const cat = l.categoria || 'Outros';
-        if (!catMap[cat]) catMap[cat] = { categoria: cat, cc: c.centro_custo, total: 0 };
-        catMap[cat].total += parseFloat(l.valor) || 0;
+  // ── ENTRADA DE VASILHAME (pátio) ───────────────────────
+  case 'retorno-patio': return {
+    titulo:'Entrada de Vasilhame', sub:'Pátio — registrar devolução',
+    botao:'Registrar — enviar para comercial',
+    html:`
+      <div class="warn-box">⚠️ Irá para validação do <strong>Comercial</strong>.</div>
+      <div class="fg">
+        <label><span class="req">*</span> Tipo de cliente</label>
+        ${segmentedTipo('tipo-cli-rp')}
+      </div>
+      <div class="fg"><label><span class="req">*</span> Cliente</label>
+        <div><input id="cli-rp" type="text" autocomplete="off"></div>
+      </div>
+      <div class="fg"><label>Operação</label>${selectEmpresa('emp-rp')}</div>
+      <div class="slabel">Itens recebidos</div>
+      <div class="items-wrap" id="itens-rp"></div>
+      <button class="btn-add" onclick="addItem('itens-rp')">+ Adicionar produto</button>
+      <div class="fg"><label>Observação</label>
+        <textarea id="obs-rp" placeholder="Condição dos barris, observações..."></textarea>
+      </div>`,
+    init: () => {
+      initSeg('tipo-cli-rp');
+      criarAC(document.getElementById('cli-rp'), q => opsCli(q), opt => {
+        document.getElementById('cli-rp')._id = opt.value;
       });
-    });
-    const cats = Object.values(catMap).sort((a,b) => b.total - a.total);
-    document.getElementById('cc-cat-tbody').innerHTML = cats.map(c => `<tr>
-      <td class="td-b">${c.categoria}</td>
-      <td><span class="tag tag-k" style="font-size:9px">${c.cc}</span></td>
-      <td class="td-r td-a">${BRL(c.total)}</td>
-      <td class="td-r" style="font-size:10px;color:var(--ink3)">${totCC>0?((c.total/totCC)*100).toFixed(1)+'%':'—'}</td>
-    </tr>`).join('') || emptyRow(4);
+      addItem('itens-rp');
+    },
+    submit: submitRetornoPatio,
+  };
 
-    // Detail
-    const allLancs = ccs.flatMap(c => (c.lancamentos||[]).map(l=>({...l,centro_custo:c.centro_custo})));
-    allLancs.sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
-    document.getElementById('cc-det-tbody').innerHTML = allLancs.slice(0,80).map(l => `<tr>
-      <td class="mono" style="font-size:10px;color:var(--ink3)">${l.data||'—'}</td>
-      <td>${tagOp(l.empresa)}</td>
-      <td><span class="tag tag-r" style="font-size:9px">Despesa</span></td>
-      <td>${l.categoria||'—'}</td>
-      <td><span class="tag tag-k" style="font-size:9px">${l.centro_custo||'—'}</span></td>
-      <td style="color:var(--ink3);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.historico||'—'}</td>
-      <td class="td-r td-a">${BRL(l.valor)}</td>
-      <td>${tagStatus(l.status)}</td>
-    </tr>`).join('') || emptyRow(8);
-  } catch(e) { console.error(e); }
-}
-
-// ══════════════════════════════════════════════════════════════
-// ESTOQUE
-// ══════════════════════════════════════════════════════════════
-async function loadEstoque() {
-  try {
-    const r = await apiGet('estoque_saldo');
-    const saldos = r.dados || [];
-    const totBarris = saldos.reduce((s,e) => s+(parseFloat(e.saldo)||0), 0);
-    const criticos  = saldos.filter(e => (parseFloat(e.saldo)||0) <= 5).length;
-
-    document.getElementById('est-kpis').innerHTML = [
-      { l:'SKUs em estoque', v:saldos.length, cls:'' },
-      { l:'Total barris',    v:NUM(totBarris)+' un', cls:'' },
-      { l:'Alertas críticos',v:criticos, cls: criticos > 0 ? 'red' : '' },
-    ].map(k=>`<div class="kpi ${k.cls}"><div class="kpi-label">${k.l}</div><div class="kpi-val">${k.v}</div></div>`).join('');
-
-    document.getElementById('est-tbody').innerHTML = saldos.map(s => {
-      const saldo = parseFloat(s.saldo)||0;
-      const cls   = saldo > 5 ? 'tag-g' : saldo > 0 ? 'tag-a' : 'tag-r';
-      const lbl   = saldo > 5 ? 'OK' : saldo > 0 ? 'Baixo' : 'Zerado';
-      return `<tr>
-        <td class="td-b mono" style="font-size:11px">${s.sku||'—'}</td>
-        <td>${s.produto||'—'}</td>
-        <td>${tagOp(s.empresa)}</td>
-        <td class="td-r td-g">${NUM(s.entradas)}</td>
-        <td class="td-r td-r2">${NUM(s.saidas)}</td>
-        <td class="td-r td-b" style="color:${saldo>5?'var(--g)':saldo>0?'var(--a)':'var(--r)'}">${NUM(saldo)}</td>
-        <td><span class="tag ${cls}">${lbl}</span></td>
-      </tr>`;
-    }).join('') || emptyRow(7);
-
-    const movR = await apiGet('estoque');
-    const movs = movR.dados || [];
-    document.getElementById('est-mov-tbody').innerHTML = movs.slice(-40).reverse().map(m => {
-      const isEntry = (parseFloat(m.qtd_entrada)||0) > 0;
-      return `<tr>
-        <td class="mono" style="font-size:10px;color:var(--ink3)">${m.data||'—'}</td>
-        <td><span class="tag ${isEntry?'tag-g':'tag-r'}">${m.tipo_mov||'—'}</span></td>
-        <td class="td-b mono" style="font-size:11px">${m.sku||'—'}</td>
-        <td>${tagOp(m.empresa)}</td>
-        <td class="td-r" style="color:${isEntry?'var(--g)':'var(--r)'};font-weight:600">${isEntry?'+':'-'}${NUM(isEntry?m.qtd_entrada:m.qtd_saida)}</td>
-        <td class="td-r" style="font-family:'IBM Plex Mono',monospace;font-size:11px">${NUM(m.saldo_apos)}</td>
-      </tr>`;
-    }).join('') || emptyRow(6);
-  } catch(e) { console.error(e); }
-}
-
-// ══════════════════════════════════════════════════════════════
-// VASILHAMES
-// ══════════════════════════════════════════════════════════════
-async function loadVasilhames() {
-  try {
-    const [sR, hR] = await Promise.all([apiGet('vasilhames_saldo'), apiGet('vasilhames')]);
-    const saldos = sR.dados || [], hist = hR.dados || [];
-    const totEnv = saldos.reduce((s,v)=>s+(parseFloat(v.enviados)||0),0);
-    const totRet = saldos.reduce((s,v)=>s+(parseFloat(v.retornados)||0),0);
-    const totPen = saldos.reduce((s,v)=>s+(parseFloat(v.pendentes)||0),0);
-    const criticos = saldos.filter(v=>(parseFloat(v.pendentes)||0)>10);
-
-    document.getElementById('vas-kpis').innerHTML = [
-      { l:'Enviados',   v:NUM(totEnv), cls:'' },
-      { l:'Retornados', v:NUM(totRet), cls:'' },
-      { l:'Pendentes',  v:NUM(totPen), cls: totPen > 50 ? 'red' : 'amber' },
-    ].map(k=>`<div class="kpi ${k.cls}"><div class="kpi-label">${k.l}</div><div class="kpi-val">${k.v}</div></div>`).join('');
-
-    document.getElementById('vas-critical-alerts').innerHTML = criticos.length > 0
-      ? `<div class="alert-row alert-r"><span class="alert-icon">⚠</span><div><strong>${criticos.length} clientes</strong> com mais de 10 barris pendentes — ${criticos.slice(0,3).map(v=>`<strong>${v.cliente}</strong> (${v.pendentes} barris)`).join(', ')}${criticos.length>3?'…':''}</div></div>` : '';
-
-    document.getElementById('vas-tbody').innerHTML = saldos.map(v => {
-      const p = parseFloat(v.pendentes)||0;
-      return `<tr>
-        <td class="td-b">${v.cliente||'—'}</td>
-        <td>${tagOp(v.empresa)}</td>
-        <td>${v.produto||v.sku||'—'}</td>
-        <td class="td-r">${NUM(v.enviados)}</td>
-        <td class="td-r td-g">${NUM(v.retornados)}</td>
-        <td class="td-r" style="color:${p>0?'var(--a)':'var(--g)'};font-weight:600;font-family:'IBM Plex Mono',monospace">${NUM(p)}</td>
-        <td><span class="tag ${p<=0?'tag-g':p<=3?'tag-a':'tag-r'}">${p<=0?'OK':p+' pend.'}</span></td>
-      </tr>`;
-    }).join('') || emptyRow(7);
-
-    document.getElementById('vas-mov-tbody').innerHTML = hist.slice(-30).reverse().map(v => `<tr>
-      <td class="mono" style="font-size:10px;color:var(--ink3)">${v.data||'—'}</td>
-      <td><span class="tag ${v.tipo==='Saída'?'tag-r':'tag-g'}">${v.tipo||'—'}</span></td>
-      <td class="td-b">${v.cliente||'—'}</td>
-      <td class="td-r" style="font-family:'IBM Plex Mono',monospace;font-weight:500;color:${v.tipo==='Saída'?'var(--r)':'var(--g)'}">${v.tipo==='Saída'?'-':'+'}${NUM(v.qtd_enviada||v.qtd_retornada)}</td>
-    </tr>`).join('') || emptyRow(4);
-  } catch(e) { console.error(e); }
-}
-
-// ══════════════════════════════════════════════════════════════
-// MIX DE PRODUTOS
-// ══════════════════════════════════════════════════════════════
-async function loadMix() {
-  try {
-    const r = await apiGet('vendas_produto');
-    const prods  = r.dados || [];
-    const totR   = prods.reduce((s,p)=>s+(parseFloat(p.receita)||0),0);
-    const totB   = prods.reduce((s,p)=>s+(parseFloat(p.barris)||0),0);
-    const totL   = prods.reduce((s,p)=>s+(parseFloat(p.litros)||0),0);
-
-    document.getElementById('mix-kpis').innerHTML = [
-      { l:'SKUs vendidos', v:prods.length, cls:'' },
-      { l:'Total barris',  v:NUM(totB), cls:'' },
-      { l:'Total litros',  v:NUM(totL)+' L', cls:'' },
-      { l:'Receita total', v:BRLK(totR), cls:'' },
-    ].map(k=>`<div class="kpi ${k.cls}"><div class="kpi-label">${k.l}</div><div class="kpi-val">${k.v}</div></div>`).join('');
-
-    document.getElementById('mix-tbody').innerHTML = prods.map((p,i) => `<tr>
-      <td class="td-c mono" style="font-size:10px;color:var(--ink3)">${i+1}</td>
-      <td class="td-b mono" style="font-size:11px">${p.sku||'—'}</td>
-      <td>${p.produto||'—'}</td>
-      <td><span class="tag tag-b" style="font-size:9px">${p.categoria||'—'}</span></td>
-      <td class="td-r">${NUM(p.barris)}</td>
-      <td class="td-r">${NUM(p.litros)}</td>
-      <td class="td-r td-g">${BRL(p.receita)}</td>
-      <td class="td-r">
-        <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end">
-          <div style="width:50px"><div class="prog-wrap"><div class="prog-fill" style="width:${totR>0?Math.min(100,(p.receita/totR)*100):0}%"></div></div></div>
-          <span style="font-size:10px;color:var(--ink3)">${totR>0?((p.receita/totR)*100).toFixed(1):'0'}%</span>
+  // ── ENTRADA DE ESTOQUE E FÁBRICA (unificado) ───────────
+  case 'entrada-estoque':
+  case 'entrada-fabrica': {
+    const isFab = tipo === 'entrada-fabrica';
+    return {
+      titulo: isFab ? 'Chegada da Fábrica' : 'Entrada de Estoque',
+      sub: isFab ? 'Pátio — barris cheios recebidos' : 'Pátio — mercadoria chegou',
+      botao: 'Registrar — enviar para comercial',
+      html:`
+        <div class="warn-box">⚠️ Aguardará validação do <strong>Comercial</strong>.</div>
+        <div class="row2">
+          <div class="fg"><label>Operação</label>${selectEmpresa('emp-ee')}</div>
+          <div class="fg"><label><span class="req">*</span> Fornecedor${isFab?' / Fábrica':''}</label>
+            <input id="forn-ee" type="text" placeholder="${isFab?'Ex: Fábrica Leme':'Ex: Fornecedor SA'}">
+          </div>
         </div>
-      </td>
-    </tr>`).join('') || emptyRow(8);
-
-    // Category breakdown
-    const catMap = {};
-    prods.forEach(p => {
-      const c = p.categoria || 'Outros';
-      if (!catMap[c]) catMap[c] = { categoria: c, barris: 0, receita: 0 };
-      catMap[c].barris  += parseFloat(p.barris) || 0;
-      catMap[c].receita += parseFloat(p.receita) || 0;
-    });
-    document.getElementById('mix-cat-body').innerHTML = Object.values(catMap).sort((a,b)=>b.receita-a.receita).map(c => {
-      const pct = totR > 0 ? (c.receita/totR)*100 : 0;
-      return `<div style="margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <span style="font-size:12.5px;font-weight:500">${c.categoria}</span>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">${BRL(c.receita)}</span>
-        </div>
-        <div class="prog-wrap"><div class="prog-fill" style="width:${pct.toFixed(1)}%"></div></div>
-      </div>`;
-    }).join('');
-
-    buildSimpleBarChart(
-      (await apiGet('vendas_mes')).dados?.filter(m=>m.barris>0)||[],
-      document.getElementById('mix-chart'), 'barris', 'mes'
-    );
-  } catch(e) { console.error(e); }
-}
-
-// ══════════════════════════════════════════════════════════════
-// DIESEL
-// ══════════════════════════════════════════════════════════════
-async function loadDiesel() {
-  try {
-    const r = await apiGet('diesel');
-    const hist = r.dados || [];
-    const totL = hist.reduce((s,d)=>s+(parseFloat(d.litros)||0),0);
-    const totV = hist.reduce((s,d)=>s+(parseFloat(d.valor_total)||0),0);
-    const kmls = hist.filter(d=>parseFloat(d.kml)>0).map(d=>parseFloat(d.kml));
-    const avgK = kmls.length > 0 ? kmls.reduce((a,b)=>a+b,0)/kmls.length : 0;
-
-    document.getElementById('dsl-kpis').innerHTML = [
-      { l:'Total litros',   v:NUM(totL)+' L', cls:'' },
-      { l:'Total gasto',    v:BRLK(totV), cls:'amber' },
-      { l:'Km/L médio',     v:avgK.toFixed(2), cls: avgK < 6 ? 'red' : '' },
-      { l:'Abastecimentos', v:hist.length, cls:'blue' },
-    ].map(k=>`<div class="kpi ${k.cls}"><div class="kpi-label">${k.l}</div><div class="kpi-val">${k.v}</div></div>`).join('');
-
-    document.getElementById('dsl-tbody').innerHTML = hist.slice(-60).reverse().map(d => `<tr>
-      <td class="mono" style="font-size:10px;color:var(--ink3)">${d.data||'—'}</td>
-      <td class="td-b">${d.placa||'—'}</td>
-      <td>${d.motorista||'—'}</td>
-      <td class="td-r">${NUM(d.litros)} L</td>
-      <td class="td-r mono" style="font-size:11px">${d.preco_litro>0?'R$\u00A0'+parseFloat(d.preco_litro).toFixed(2):'—'}</td>
-      <td class="td-r td-a">${BRL(d.valor_total)}</td>
-      <td class="td-r mono" style="font-size:11px;color:${parseFloat(d.kml)>6?'var(--g)':'var(--r)'}">${parseFloat(d.kml)>0?parseFloat(d.kml).toFixed(2)+' km/L':'—'}</td>
-    </tr>`).join('') || emptyRow(7);
-
-    // Per vehicle
-    const veicMap = {};
-    hist.forEach(d => {
-      const pl = d.placa||'SEM';
-      if (!veicMap[pl]) veicMap[pl] = { placa:pl, litros:0, valor:0, km:0, n:0, kmls:[] };
-      veicMap[pl].litros += parseFloat(d.litros)||0;
-      veicMap[pl].valor  += parseFloat(d.valor_total)||0;
-      veicMap[pl].km     += parseFloat(d.km_percorridos)||0;
-      veicMap[pl].n++;
-      if (parseFloat(d.kml)>0) veicMap[pl].kmls.push(parseFloat(d.kml));
-    });
-    document.getElementById('dsl-veic-body').innerHTML = Object.values(veicMap).map(v => {
-      const avgKml = v.kmls.length > 0 ? v.kmls.reduce((a,b)=>a+b,0)/v.kmls.length : 0;
-      return `<div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--bd)">
-        <div style="flex:1">
-          <div style="font-size:12.5px;font-weight:600">${v.placa}</div>
-          <div style="font-size:11px;color:var(--ink3)">${v.n} abastec. · ${NUM(v.litros)}L · ${NUM(v.km)} km</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;color:${avgKml>6?'var(--g)':'var(--a)'}">${avgKml.toFixed(2)} km/L</div>
-          <div style="font-size:11px;color:var(--ink3)">${BRL(v.valor)}</div>
-        </div>
-      </div>`;
-    }).join('') || '<div class="empty-state"><p>Sem dados</p></div>';
-  } catch(e) { console.error(e); }
-}
-
-async function loadRotas() {
-  try {
-    const r = await apiGet('rotas');
-    const rotas = r.dados || [];
-    const totKm  = rotas.reduce((s,r)=>s+(parseFloat(r.km_percorridos)||0),0);
-    const totMin = rotas.reduce((s,r)=>s+(parseFloat(r.duracao_min)||0),0);
-
-    document.getElementById('rot-kpis').innerHTML = [
-      { l:'Total rotas',    v:rotas.length, cls:'' },
-      { l:'Km percorridos', v:NUM(totKm)+' km', cls:'' },
-      { l:'Horas em rota',  v:(totMin/60).toFixed(0)+'h', cls:'blue' },
-    ].map(k=>`<div class="kpi ${k.cls}"><div class="kpi-label">${k.l}</div><div class="kpi-val">${k.v}</div></div>`).join('');
-
-    document.getElementById('rot-tbody').innerHTML = rotas.slice(-60).reverse().map(r => `<tr>
-      <td class="mono" style="font-size:10px;color:var(--ink3)">${r.data||'—'}</td>
-      <td class="td-b">${r.placa||'—'}</td>
-      <td>${r.motorista||'—'}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink3)">${r.destino||'—'}</td>
-      <td class="td-r mono" style="font-size:11px">${r.km_percorridos>0?NUM(r.km_percorridos)+' km':'—'}</td>
-      <td class="td-r mono" style="font-size:11px">${r.duracao_min>0?(r.duracao_min/60).toFixed(1)+'h':'—'}</td>
-      <td class="td-r">${r.diesel_estimado>0?NUM(r.diesel_estimado)+' L':'—'}</td>
-      <td>${tagStatus(r.status)}</td>
-    </tr>`).join('') || emptyRow(8);
-  } catch(e) { console.error(e); }
-}
-
-async function loadRetornos() {
-  try {
-    const r = await apiGet('vasilhames');
-    const ret = (r.dados||[]).filter(v=>v.tipo==='Retorno').slice(-50).reverse();
-    document.getElementById('ret-tbody').innerHTML = ret.map(v => `<tr>
-      <td class="mono" style="font-size:10px;color:var(--ink3)">${v.data||'—'}</td>
-      <td class="td-b">${v.cliente||'—'}</td>
-      <td>${v.produto||v.sku||'—'}</td>
-      <td class="td-r td-g">+${NUM(v.qtd_retornada)}</td>
-      <td>${v.motorista||'—'}</td>
-      <td style="color:var(--ink3)">${v.obs||'—'}</td>
-    </tr>`).join('') || emptyRow(6, 'Nenhum retorno registrado ainda');
-  } catch(e) { console.error(e); }
-}
-
-// ══════════════════════════════════════════════════════════════
-// FIELD SUBMIT
-// ══════════════════════════════════════════════════════════════
-function calcD() {
-  const a=parseFloat(document.getElementById('d-kma').value)||0, b=parseFloat(document.getElementById('d-kmb').value)||0;
-  const l=parseFloat(document.getElementById('d-lit').value)||0, p=parseFloat(document.getElementById('d-prc').value)||0;
-  const k=(a>b&&l>0)?(a-b)/l:0;
-  document.getElementById('d-kml').textContent=k>0?k.toFixed(2)+' km/L':'—';
-  document.getElementById('d-tot').textContent=l>0&&p>0?'R$\u00A0'+(l*p).toLocaleString('pt-BR',{minimumFractionDigits:2}):'—';
-}
-async function submitDiesel() {
-  const l=parseFloat(document.getElementById('d-lit').value)||0;
-  if (!l) { toast('Informe os litros','err'); return; }
-  try {
-    const r=await apiPost('gravar_diesel',{
-      data:document.getElementById('d-dt').value, empresa:document.getElementById('d-emp').value,
-      placa:document.getElementById('d-placa').value, motorista:document.getElementById('d-mot').value,
-      km_atual:parseFloat(document.getElementById('d-kma').value)||0,
-      km_anterior:parseFloat(document.getElementById('d-kmb').value)||0,
-      litros:l, preco_litro:parseFloat(document.getElementById('d-prc').value)||0,
-      obs:document.getElementById('d-obs').value,
-    });
-    toast('Abastecimento registrado! Km/L: '+r.kml); closeM('m-diesel'); loadDiesel();
-  } catch(e) { toast('Erro: '+e.message,'err'); }
-}
-
-function calcR() {
-  const i=parseFloat(document.getElementById('r-kmi').value)||0, f=parseFloat(document.getElementById('r-kmf').value)||0;
-  document.getElementById('r-km').textContent=f>i?(f-i)+' km':'—';
-}
-async function submitRota() {
-  try {
-    await apiPost('gravar_rota',{
-      data:document.getElementById('r-dt').value, hora_saida:document.getElementById('r-hs').value,
-      hora_chegada:document.getElementById('r-hc').value, placa:document.getElementById('r-placa').value,
-      motorista:document.getElementById('r-mot').value, empresa:'Master',
-      destino:document.getElementById('r-dest').value,
-      km_inicial:parseFloat(document.getElementById('r-kmi').value)||0,
-      km_final:parseFloat(document.getElementById('r-kmf').value)||0,
-      obs:document.getElementById('r-obs').value, status:'Concluída',
-    });
-    toast('Rota registrada!','ok'); closeM('m-rota'); loadRotas();
-  } catch(e) { toast('Erro: '+e.message,'err'); }
-}
-
-async function submitRetorno() {
-  const qtd=parseFloat(document.getElementById('v-qtd').value)||0;
-  const cli=document.getElementById('v-cli').value;
-  const sku=document.getElementById('v-sku').value;
-  if (!qtd||!cli||!sku) { toast('Preencha cliente, SKU e quantidade','err'); return; }
-  try {
-    await apiPost('retorno_vasilhame',{
-      data:document.getElementById('v-dt').value, empresa:document.getElementById('v-emp').value,
-      cliente:cli, sku, produto:sku, qtd_retornada:qtd,
-      motorista:document.getElementById('v-mot').value,
-      obs:document.getElementById('v-obs').value, ref_pedido:document.getElementById('v-ref').value,
-    });
-    toast('Retorno registrado!','ok'); closeM('m-retorno'); loadVasilhames();
-  } catch(e) { toast('Erro: '+e.message,'err'); }
-}
-
-async function submitEstoque() {
-  const sku=document.getElementById('e-sku').value;
-  if (!sku) { toast('Selecione o SKU','err'); return; }
-  try {
-    await apiPost('gravar_estoque',{
-      data:document.getElementById('e-dt').value, empresa:document.getElementById('e-emp').value,
-      sku, produto:sku, tipo_mov:document.getElementById('e-tipo').value,
-      qtd_entrada:parseFloat(document.getElementById('e-ent').value)||0,
-      qtd_saida:parseFloat(document.getElementById('e-sai').value)||0,
-      preco_unitario:parseFloat(document.getElementById('e-preco').value)||0,
-      ref_pedido:document.getElementById('e-ref').value, obs:document.getElementById('e-obs').value,
-    });
-    toast('Estoque registrado!','ok'); closeM('m-estoque'); loadEstoque();
-  } catch(e) { toast('Erro: '+e.message,'err'); }
-}
-
-async function submitLancamento() {
-  const val=parseFloat(document.getElementById('fin-val').value)||0;
-  if (!val) { toast('Informe o valor','err'); return; }
-  try {
-    const comp=document.getElementById('fin-comp').value||'';
-    const [y,m]=comp.split('-');
-    await apiPost('gravar_lancamento',{
-      data:document.getElementById('fin-dt').value,
-      competencia: m&&y ? `${m}/${y}` : mAtual(),
-      empresa:document.getElementById('fin-emp').value,
-      tipo:document.getElementById('fin-tipo').value,
-      categoria:document.getElementById('fin-cat').value,
-      centro_custo:document.getElementById('fin-cc').value,
-      historico:document.getElementById('fin-hist').value,
-      valor_total:val, status:document.getElementById('fin-status').value,
-    });
-    toast('Lançamento gravado!','ok'); closeM('m-lancamento'); loadCustos();
-  } catch(e) { toast('Erro: '+e.message,'err'); }
-}
-
-// ══════════════════════════════════════════════════════════════
-// CONFIG
-// ══════════════════════════════════════════════════════════════
-async function rodarDiagnostico() {
-  const el = document.getElementById('diag-res');
-  el.style.display = 'block';
-  el.textContent = 'Rodando diagnóstico...';
-  try {
-    const r = await apiGet('diagnostico', {});
-    if (!r.ok) throw new Error(r.erro || 'Falha');
-    const d = r.dados;
-    let txt = '';
-    Object.entries(d).forEach(([nome, info]) => {
-      const ok = info.existe;
-      txt += (ok ? '✓' : '✗') + ' ' + nome;
-      if (ok) {
-        txt += '\n  linhas: ' + (info.linhas - 1);
-        if (info.headers?.length > 0) txt += '\n  headers: ' + info.headers.slice(0,5).join(', ') + (info.headers.length > 5 ? '...' : '');
-        if (info.amostra?.length > 0 && info.amostra[0]?.length > 0) {
-          txt += '\n  1a linha: ' + info.amostra[0].slice(0,4).join(' | ');
+        <div class="slabel">Produtos recebidos</div>
+        <div class="items-wrap" id="itens-ee"></div>
+        <button class="btn-add" onclick="addItem('itens-ee',true)">+ Adicionar produto</button>
+        ${isFab ? `<div class="fg"><label>Barris que ficaram na fábrica (se houver)</label>
+          <input type="number" id="ficaram-ee" placeholder="0" min="0"></div>` : ''}
+        <div class="fg"><label>Observação</label>
+          <textarea id="obs-ee" placeholder="Divergências, avarias, observações..."></textarea>
+        </div>`,
+      init: () => {
+        if (isFab) {
+          criarAC(document.getElementById('forn-ee'), q => [
+            {label:'Fábrica Leme',meta:'SP',value:'Fábrica Leme'},
+            {label:'Fábrica Campinas A',meta:'SP',value:'Fábrica Campinas A'},
+            {label:'Fábrica Campinas B',meta:'SP',value:'Fábrica Campinas B'},
+          ].filter(x=>x.label.toLowerCase().includes(q)), opt => {});
         }
-      } else {
-        txt += ' — NÃO EXISTE';
-        if (info.erro) txt += '\n  erro: ' + info.erro;
-      }
-      txt += '\n\n';
-    });
-    el.style.color = 'var(--ink2)';
-    el.textContent = txt;
-  } catch(e) {
-    el.style.color = 'var(--r)';
-    el.textContent = 'Erro: ' + (e.message || e);
+        addItem('itens-ee', true);
+      },
+      submit: () => submitEntradaEstoque(isFab),
+    };
+  }
+
+  // ── ENVIO PARA FÁBRICA ─────────────────────────────────
+  case 'saida-fabrica': return {
+    titulo:'Envio para Fábrica', sub:'Barris vazios saindo',
+    botao:'Confirmar envio',
+    html:`
+      <div class="row2">
+        <div class="fg"><label>Operação</label>${selectEmpresa('emp-sf')}</div>
+        <div class="fg"><label><span class="req">*</span> Fábrica</label>
+          <select id="fab-sf">
+            <option value="Fábrica Leme">Fábrica Leme</option>
+            <option value="Fábrica Campinas A">Fábrica Campinas A</option>
+            <option value="Fábrica Campinas B">Fábrica Campinas B</option>
+          </select>
+        </div>
+      </div>
+      <div class="slabel">Barris enviados (vazios)</div>
+      <div class="items-wrap" id="itens-sf"></div>
+      <button class="btn-add" onclick="addItem('itens-sf')">+ Adicionar SKU</button>
+      <div class="fg"><label>Observação</label>
+        <textarea id="obs-sf" placeholder="Pedido solicitado, observações..."></textarea>
+      </div>`,
+    init: () => addItem('itens-sf'),
+    submit: submitSaidaFabrica,
+  };
+
+  // ── ABASTECIMENTO ──────────────────────────────────────
+  case 'abastecimento': return {
+    titulo:'Abastecimento', sub:'Selecione o veículo da frota',
+    botao:'Registrar abastecimento',
+    html:`
+      <div class="fg"><label><span class="req">*</span> Veículo</label>
+        <select id="vei-ab">
+          <option value="">— Selecionar veículo —</option>
+          ${VEICULOS.map(v=>`<option value="${v.placa}">${v.placa} — ${v.modelo} (${v.empresa})</option>`).join('')}
+        </select>
+      </div>
+      <div class="fg"><label><span class="req">*</span> Origem do diesel</label>
+        <select id="orig-ab" onchange="updatePrecoCampo()">
+          <option value="tanque">Tanque próprio do CD</option>
+          <option value="posto">Posto externo</option>
+        </select>
+      </div>
+      <div class="row2">
+        <div class="fg"><label><span class="req">*</span> Litros</label>
+          <input type="number" id="lit-ab" placeholder="Ex: 80" min="1" step="0.1" oninput="calcAbast()">
+        </div>
+        <div class="fg"><label id="lbl-preco">Preço/L (R$)</label>
+          <input type="number" id="preco-ab" placeholder="—" min="0" step="0.01" oninput="calcAbast()">
+        </div>
+      </div>
+      <div class="row2">
+        <div class="fg"><label><span class="req">*</span> Km atual</label>
+          <input type="number" id="kma-ab" placeholder="Ex: 45.350" min="0" oninput="calcAbast()">
+        </div>
+        <div class="fg"><label>Km anterior</label>
+          <input type="number" id="kmb-ab" placeholder="Anterior" min="0" oninput="calcAbast()">
+        </div>
+      </div>
+      <div id="calc-ab-box" class="calc-box" style="display:none"></div>
+      <div class="fg"><label>Motorista</label>
+        <input type="text" id="mot-ab" placeholder="Nome do motorista">
+      </div>
+      <div class="fg"><label>Observação</label>
+        <textarea id="obs-ab" placeholder="Ex: óleo verificado, pneu calibrado..."></textarea>
+      </div>`,
+    init: () => {
+      document.getElementById('mot-ab').value = NOME;
+      updatePrecoCampo();
+    },
+    submit: submitAbastecimento,
+  };
+
+  // ── ENTRADA NO TANQUE ──────────────────────────────────
+  case 'entrada-tanque': return {
+    titulo:'Entrada no Tanque', sub:'Diesel recebido no CD',
+    botao:'Registrar entrada no tanque',
+    html:`
+      <div class="row2">
+        <div class="fg"><label><span class="req">*</span> Litros recebidos</label>
+          <input type="number" id="lit-et" placeholder="Ex: 1500" min="1" oninput="calcTanque()">
+        </div>
+        <div class="fg"><label><span class="req">*</span> Preço/L (R$)</label>
+          <input type="number" id="preco-et" placeholder="Ex: 5.90" min="0" step="0.01" oninput="calcTanque()">
+        </div>
+      </div>
+      <div id="calc-et-box" class="calc-box" style="display:none"></div>
+      <div class="row2">
+        <div class="fg"><label><span class="req">*</span> Fornecedor</label>
+          <input type="text" id="forn-et" placeholder="Nome do fornecedor">
+        </div>
+        <div class="fg"><label>Observação</label>
+          <input type="text" id="obs-et" placeholder="Opcional">
+        </div>
+      </div>`,
+    init: () => {},
+    submit: submitEntradaTanque,
+  };
+
+  // ── AJUSTE DE ESTOQUE ──────────────────────────────────
+  case 'ajuste-estoque': return {
+    titulo:'Ajuste de Estoque', sub:'Correção por inventário ou quebra',
+    botao:'Registrar ajuste — enviar para validação',
+    html:`
+      <div class="fg"><label>Operação</label>${selectEmpresa('emp-aj')}</div>
+      <div class="fg"><label><span class="req">*</span> Produto</label>
+        <div><input id="sku-aj" type="text" autocomplete="off"></div>
+      </div>
+      <div class="row2">
+        <div class="fg"><label><span class="req">*</span> Tipo</label>
+          <select id="tipo-aj">
+            <option value="true">+ Acréscimo</option>
+            <option value="false">− Redução</option>
+          </select>
+        </div>
+        <div class="fg"><label><span class="req">*</span> Quantidade</label>
+          <input type="number" id="qtd-aj" placeholder="Ex: 3" min="1">
+        </div>
+      </div>
+      <div class="fg"><label><span class="req">*</span> Motivo</label>
+        <textarea id="obs-aj" placeholder="Ex: barril encontrado / 3 barris amassados..."></textarea>
+      </div>`,
+    init: () => {
+      criarAC(document.getElementById('sku-aj'), q=>opsProd(q), opt=>{
+        document.getElementById('sku-aj')._sku = opt.value;
+      });
+    },
+    submit: submitAjusteEstoque,
+  };
+
+  // ── SALDO INICIAL ──────────────────────────────────────
+  case 'saldo-inicial': return {
+    titulo:'Saldo Inicial', sub:'Inventário físico — 27/04',
+    botao:'Lançar saldo inicial',
+    html:`
+      <div class="info-box">📌 Uma linha por SKU por local. Para retornáveis em campo, uma linha por cliente.</div>
+      <div class="fg"><label><span class="req">*</span> Tipo</label>
+        <select id="tipo-si" onchange="toggleClienteSI()">
+          <option value="estoque">Estoque no pátio</option>
+          <option value="ret_patio">Retornável — pátio (em mãos)</option>
+          <option value="ret_campo">Retornável — em campo (cliente)</option>
+          <option value="tanque">Diesel no tanque</option>
+        </select>
+      </div>
+      <div class="fg"><label>Operação</label>${selectEmpresa('emp-si')}</div>
+      <div class="fg" id="cli-si-wrap" style="display:none">
+        <label><span class="req">*</span> Cliente (para retornável em campo)</label>
+        <div><input id="cli-si" type="text" autocomplete="off"></div>
+      </div>
+      <div class="fg" id="sku-si-wrap"><label><span class="req">*</span> Produto / SKU</label>
+        <div><input id="sku-si" type="text" autocomplete="off"></div>
+      </div>
+      <div class="row2">
+        <div class="fg"><label><span class="req">*</span> Quantidade</label>
+          <input type="number" id="qtd-si" placeholder="Ex: 45" min="0" oninput="calcSI()">
+        </div>
+        <div class="fg"><label>Custo unitário (R$)</label>
+          <input type="number" id="custo-si" placeholder="Ex: 145" min="0" step="0.01" oninput="calcSI()">
+        </div>
+      </div>
+      <div id="calc-si-box" class="calc-box" style="display:none"></div>`,
+    init: () => {
+      criarAC(document.getElementById('cli-si'), q=>opsCli(q), opt=>{ document.getElementById('cli-si')._id=opt.value; });
+      criarAC(document.getElementById('sku-si'), q=>opsProd(q), opt=>{ document.getElementById('sku-si')._sku=opt.value; });
+    },
+    submit: submitSaldoInicial,
+  };
+
+  // ── OCORRÊNCIA ─────────────────────────────────────────
+  case 'ocorrencia': return {
+    titulo:'Ocorrência de Entrega', sub:'Registrada na aba Retornáveis (obs)',
+    botao:'Registrar ocorrência',
+    html:`
+      <div class="info-box">📋 A ocorrência fica registrada como observação e gera alerta para o comercial.</div>
+      <div class="fg">
+        <label><span class="req">*</span> Tipo de cliente</label>
+        ${segmentedTipo('tipo-cli-oc')}
+      </div>
+      <div class="fg"><label><span class="req">*</span> Cliente</label>
+        <div><input id="cli-oc" type="text" autocomplete="off"></div>
+      </div>
+      <div class="fg"><label><span class="req">*</span> Tipo de ocorrência</label>
+        <select id="tipo-oc">
+          <option value="cliente_ausente">Cliente ausente</option>
+          <option value="entrega_parcial">Entrega parcial</option>
+          <option value="recusa">Cliente recusou</option>
+          <option value="acesso">Problema de acesso</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div class="fg"><label><span class="req">*</span> Descrição</label>
+        <textarea id="obs-oc" placeholder="Descreva o que aconteceu..."></textarea>
+      </div>`,
+    init: () => {
+      initSeg('tipo-cli-oc');
+      criarAC(document.getElementById('cli-oc'), q=>opsCli(q), opt=>{ document.getElementById('cli-oc')._id=opt.value; });
+    },
+    submit: submitOcorrencia,
+  };
+
+  default: return {titulo:'Formulário',sub:'',html:'',botao:'OK',submit:()=>voltarForm()};
   }
 }
 
-async function testarConn() {
-  const url=document.getElementById('cfg-url').value.trim();
-  if (!url) { document.getElementById('cfg-res').textContent='Cole a URL do Apps Script'; return; }
-  document.getElementById('cfg-res').textContent='Testando...';
+// ──────────────────────────────────────────────────────────────
+// HELPERS DE FORM
+// ──────────────────────────────────────────────────────────────
+function segmentedTipo(id) {
+  return `<div class="seg" id="${id}">
+    <button class="seg-btn active" data-val="Distribuidor" onclick="setSeg(this,'${id}')">Distribuidor</button>
+    <button class="seg-btn" data-val="PDV" onclick="setSeg(this,'${id}')">PDV</button>
+    <button class="seg-btn" data-val="Delivery" onclick="setSeg(this,'${id}')">Delivery</button>
+  </div>`;
+}
+function initSeg(id) { /* já renderizado ativo no primeiro */ }
+function setSeg(btn, id) {
+  document.querySelectorAll(`#${id} .seg-btn`).forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function getSegVal(id) {
+  return document.querySelector(`#${id} .seg-btn.active`)?.dataset.val || '';
+}
+
+function selectEmpresa(id) {
+  return `<select id="${id}">
+    <option value="Master">Master</option>
+    <option value="Winechopp">Winechopp</option>
+  </select>`;
+}
+
+// ── Itens dinâmicos ────────────────────────────────────────────
+function addItem(containerId, comPreco=false) {
+  const n = ++_itemN;
+  const cnt = document.getElementById(containerId);
+  if (!cnt) return;
+  const d = document.createElement('div');
+  d.className = 'item-row';
+  d.id = 'item-'+n;
+  d.innerHTML = `
+    <div class="item-row-top">
+      <div class="fg" style="flex:1">
+        <label>Produto / SKU</label>
+        <div><input id="ip-sku-${n}" type="text" autocomplete="off" placeholder="Digitar SKU ou nome..."></div>
+      </div>
+      <button class="btn-rm" onclick="document.getElementById('item-${n}').remove()">×</button>
+    </div>
+    <div class="item-row-bot${comPreco?' with-price':''}">
+      <div class="fg"><label>Quantidade</label>
+        <input type="number" id="ip-qtd-${n}" placeholder="Qtd" min="1" step="1"${comPreco?` oninput="calcItemTotal(${n})"`:''}>
+      </div>
+      ${comPreco ? `
+      <div class="fg"><label>Custo unitário (R$)</label>
+        <input type="number" id="ip-preco-${n}" placeholder="R$" min="0" step="0.01" oninput="calcItemTotal(${n})">
+      </div>
+      <div class="fg"><label>Total</label>
+        <input type="text" id="ip-total-${n}" placeholder="—" readonly style="background:var(--g2);color:var(--g);font-weight:600">
+      </div>` : ''}
+    </div>`;
+  cnt.appendChild(d);
+  criarAC(document.getElementById('ip-sku-'+n), q=>opsProd(q), opt=>{
+    document.getElementById('ip-sku-'+n)._sku = opt.value;
+    document.getElementById('ip-sku-'+n)._nome = opt.nome;
+  });
+}
+
+function calcItemTotal(n) {
+  const qtd   = parseFloat(document.getElementById('ip-qtd-'+n)?.value)||0;
+  const preco = parseFloat(document.getElementById('ip-preco-'+n)?.value)||0;
+  const tot   = document.getElementById('ip-total-'+n);
+  if (tot) tot.value = qtd && preco ? 'R$ '+(qtd*preco).toFixed(2).replace('.',',') : '—';
+}
+
+function coletarItens(containerId, comPreco=false) {
+  const cnt = document.getElementById(containerId);
+  if (!cnt) return [];
+  const items = [];
+  cnt.querySelectorAll('[id^="ip-sku-"]').forEach(el => {
+    const n   = el.id.split('-').pop();
+    const sku = el._sku || el.value.trim();
+    const nome= el._nome || el.value.trim();
+    const qtd = parseFloat(document.getElementById('ip-qtd-'+n)?.value)||0;
+    const preco = comPreco ? parseFloat(document.getElementById('ip-preco-'+n)?.value)||0 : 0;
+    if ((sku||nome) && qtd>0) items.push({sku, nome, qtd, ...(comPreco&&{preco_unitario:preco, valor_total:qtd*preco})});
+  });
+  return items;
+}
+
+// Cálculos ao vivo
+function updatePrecoCampo() {
+  const posto = document.getElementById('orig-ab')?.value==='posto';
+  const lbl   = document.getElementById('lbl-preco');
+  if (lbl) lbl.textContent = posto ? 'Preço/L * (R$)' : 'Preço/L (R$)';
+  calcAbast();
+}
+function calcAbast() {
+  const l = parseFloat(document.getElementById('lit-ab')?.value)||0;
+  const p = parseFloat(document.getElementById('preco-ab')?.value)||0;
+  const kma = parseFloat(document.getElementById('kma-ab')?.value)||0;
+  const kmb = parseFloat(document.getElementById('kmb-ab')?.value)||0;
+  const box = document.getElementById('calc-ab-box');
+  if (!box) return;
+  const linhas = [];
+  if (l&&p) linhas.push(`Total: R$ ${(l*p).toFixed(2).replace('.',',')}  (${l}L × R$ ${p.toFixed(2).replace('.',',')})`);
+  if (kma&&kmb&&kma>kmb) {
+    const km = kma-kmb;
+    const kml = l>0 ? (km/l).toFixed(2) : '—';
+    linhas.push(`${km} km percorridos  ·  ${kml} km/L`);
+  }
+  box.style.display = linhas.length ? 'block' : 'none';
+  box.textContent = linhas.join('\n');
+}
+function calcTanque() {
+  const l = parseFloat(document.getElementById('lit-et')?.value)||0;
+  const p = parseFloat(document.getElementById('preco-et')?.value)||0;
+  const box = document.getElementById('calc-et-box');
+  if (!box) return;
+  if (l&&p) { box.style.display='block'; box.textContent=`Total a pagar: R$ ${(l*p).toFixed(2).replace('.',',')}  (${l}L × R$ ${p.toFixed(2).replace('.',',')} /L)`; }
+  else box.style.display='none';
+}
+function calcSI() {
+  const qtd   = parseFloat(document.getElementById('qtd-si')?.value)||0;
+  const custo = parseFloat(document.getElementById('custo-si')?.value)||0;
+  const box   = document.getElementById('calc-si-box');
+  if (!box) return;
+  if (qtd&&custo) { box.style.display='block'; box.textContent=`Valor total: R$ ${(qtd*custo).toFixed(2).replace('.',',')}  (${qtd} un × R$ ${custo.toFixed(2).replace('.',',')})`; }
+  else box.style.display='none';
+}
+function toggleClienteSI() {
+  const tipo = document.getElementById('tipo-si')?.value;
+  const wrap = document.getElementById('cli-si-wrap');
+  if (wrap) wrap.style.display = tipo==='ret_campo' ? 'flex' : 'none';
+}
+
+// ──────────────────────────────────────────────────────────────
+// SUBMITS
+// ──────────────────────────────────────────────────────────────
+async function handleSub() {
+  const btn = document.getElementById('btn-sub');
+  btn.disabled=true; btn.textContent='Enviando…';
   try {
-    const r=await fetch(url+'?endpoint=status');
-    const j=await r.json();
-    if (j.ok) {
-      document.getElementById('cfg-res').style.color='var(--g)';
-      document.getElementById('cfg-res').textContent='✓ Conectado — '+j.msg;
-      setConn(true);
-    } else throw new Error(j.erro||'Falha');
+    await _formSubmit();
   } catch(e) {
-    document.getElementById('cfg-res').style.color='var(--r)';
-    document.getElementById('cfg-res').textContent='✗ '+e.message;
-    setConn(false);
+    toast('Erro: '+e.message, 'err');
+    btn.disabled=false; btn.textContent='Tentar novamente';
   }
 }
-function salvarCfg() {
-  const url=document.getElementById('cfg-url').value.trim();
-  localStorage.setItem(API_KEY,url); CFG.url=url; toast('URL salva!','ok');
+
+async function submitRetornoMotorista() {
+  const cliente = document.getElementById('cli-rm')?.value.trim();
+  const cliId   = document.getElementById('cli-rm')?._id||'';
+  const empresa = document.getElementById('emp-rm')?.value;
+  const itens   = coletarItens('itens-rm');
+  const obs     = document.getElementById('obs-rm')?.value;
+  if (!cliente) throw new Error('Informe o cliente');
+  if (!itens.length) throw new Error('Adicione ao menos um produto');
+  for (const it of itens) {
+    await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,destino:cliente,destino_id:cliId,empresa,registrado_por:NOME,origem_registro:'motorista',obs});
+  }
+  toast('✓ Retorno registrado — aguarda validação do pátio','ok');
+  voltarForm();
 }
 
-// ══════════════════════════════════════════════════════════════
-// INIT
-// ══════════════════════════════════════════════════════════════
-async function init() {
-  populateMeses();
-  const saved=localStorage.getItem(API_KEY);
-  if (saved) { document.getElementById('cfg-url').value=saved; CFG.url=saved; }
-  await loadSkuCache();
-  loadDashboard();
-  try { const r=await apiGet('status'); setConn(r.ok); } catch(e) { setConn(false); }
+async function submitRetornoPatio() {
+  const cliente = document.getElementById('cli-rp')?.value.trim();
+  const cliId   = document.getElementById('cli-rp')?._id||'';
+  const empresa = document.getElementById('emp-rp')?.value;
+  const itens   = coletarItens('itens-rp');
+  const obs     = document.getElementById('obs-rp')?.value;
+  if (!cliente) throw new Error('Informe o cliente');
+  if (!itens.length) throw new Error('Adicione ao menos um produto');
+  for (const it of itens) {
+    await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,destino:cliente,destino_id:cliId,empresa,registrado_por:NOME,origem_registro:'patio_distribuidor',obs});
+  }
+  toast('✓ Entrada registrada — aguarda validação do comercial','ok');
+  voltarForm();
+  if (PAPEL==='patio') carregarPendencias('patio');
 }
-init();
+
+async function submitEntradaEstoque(isFab=false) {
+  const empresa  = document.getElementById('emp-ee')?.value;
+  const forn     = document.getElementById('forn-ee')?.value.trim();
+  const ficaram  = isFab ? parseFloat(document.getElementById('ficaram-ee')?.value)||0 : 0;
+  const itens    = coletarItens('itens-ee', true);
+  const obs      = document.getElementById('obs-ee')?.value;
+  if (!forn) throw new Error('Informe o fornecedor'+(isFab?' / fábrica':''));
+  if (!itens.length) throw new Error('Adicione ao menos um produto');
+  for (const it of itens) {
+    await api('entrada_estoque',{
+      sku:it.sku, qtd:it.qtd, preco_unitario:it.preco_unitario,
+      tipo_mov: isFab ? 'Entrada Fábrica' : 'Entrada Compra',
+      empresa, fornecedor:forn,
+      registrado_por:NOME,
+      obs: obs + (ficaram>0&&isFab ? ` | ${ficaram} barris ficaram em ${forn}` : ''),
+    });
+    if (isFab) {
+      await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,tipo_mov:'Entrada Fábrica',destino:forn,empresa,validacao:'direto',registrado_por:NOME});
+    }
+  }
+  toast('✓ Entrada registrada — aguarda validação do comercial','ok');
+  voltarForm();
+}
+
+async function submitSaidaFabrica() {
+  const empresa = document.getElementById('emp-sf')?.value;
+  const fabrica = document.getElementById('fab-sf')?.value;
+  const itens   = coletarItens('itens-sf');
+  const obs     = document.getElementById('obs-sf')?.value;
+  if (!itens.length) throw new Error('Adicione ao menos um SKU');
+  for (const it of itens) {
+    await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,tipo_mov:'Saída Fábrica',destino:fabrica,empresa,registrado_por:NOME,obs});
+    await api('ajuste_estoque',{sku:it.sku,qtd:it.qtd,positivo:false,empresa,motivo:'Saída para '+fabrica,registrado_por:NOME});
+  }
+  toast('✓ Envio para fábrica registrado','ok');
+  voltarForm();
+}
+
+async function submitAbastecimento() {
+  const placa  = document.getElementById('vei-ab')?.value;
+  const origem = document.getElementById('orig-ab')?.value;
+  const litros = parseFloat(document.getElementById('lit-ab')?.value)||0;
+  const preco  = parseFloat(document.getElementById('preco-ab')?.value)||0;
+  const kma    = parseFloat(document.getElementById('kma-ab')?.value)||0;
+  const kmb    = parseFloat(document.getElementById('kmb-ab')?.value)||0;
+  const mot    = document.getElementById('mot-ab')?.value;
+  const obs    = document.getElementById('obs-ab')?.value;
+  const vei    = VEICULOS.find(v=>v.placa===placa);
+  if (!placa) throw new Error('Selecione o veículo');
+  if (!litros) throw new Error('Informe os litros');
+  if (origem==='posto'&&!preco) throw new Error('Informe o preço por litro');
+  if (!kma) throw new Error('Informe o km atual');
+  await api('abastecimento',{placa,modelo:vei?.modelo||'',origem_diesel:origem,litros,preco_litro:preco,km_atual:kma,km_anterior:kmb,motorista:mot,empresa:vei?.empresa||'Master',registrado_por:NOME,obs});
+  const kmP=kma>kmb?kma-kmb:0; const kml=kmP&&litros?(kmP/litros).toFixed(1):'—';
+  toast(`✓ Abastecimento registrado\n${placa} · ${litros}L · ${kmP}km · ${kml}km/L`,'ok');
+  voltarForm();
+}
+
+async function submitEntradaTanque() {
+  const litros = parseFloat(document.getElementById('lit-et')?.value)||0;
+  const preco  = parseFloat(document.getElementById('preco-et')?.value)||0;
+  const forn   = document.getElementById('forn-et')?.value.trim();
+  const obs    = document.getElementById('obs-et')?.value;
+  if (!litros) throw new Error('Informe os litros');
+  if (!preco)  throw new Error('Informe o preço por litro');
+  if (!forn)   throw new Error('Informe o fornecedor');
+  await api('entrada_tanque',{litros,preco_litro:preco,fornecedor:forn,empresa:'Master',registrado_por:NOME,obs});
+  toast(`✓ ${litros}L no tanque · R$ ${(litros*preco).toFixed(2).replace('.',',')}`, 'ok');
+  voltarForm();
+  if (PAPEL==='operacional') carregarSaldoTanque();
+}
+
+async function submitAjusteEstoque() {
+  const empresa  = document.getElementById('emp-aj')?.value;
+  const sku      = document.getElementById('sku-aj')?._sku || document.getElementById('sku-aj')?.value.trim();
+  const positivo = document.getElementById('tipo-aj')?.value==='true';
+  const qtd      = parseFloat(document.getElementById('qtd-aj')?.value)||0;
+  const motivo   = document.getElementById('obs-aj')?.value.trim();
+  if (!sku) throw new Error('Informe o produto');
+  if (!qtd) throw new Error('Informe a quantidade');
+  if (!motivo) throw new Error('Informe o motivo');
+  await api('ajuste_estoque',{sku,qtd,positivo,empresa,motivo,registrado_por:NOME});
+  toast('✓ Ajuste registrado — aguarda validação','ok');
+  voltarForm();
+}
+
+async function submitSaldoInicial() {
+  const tipo    = document.getElementById('tipo-si')?.value;
+  const empresa = document.getElementById('emp-si')?.value;
+  const cliente = document.getElementById('cli-si')?.value.trim();
+  const sku     = document.getElementById('sku-si')?._sku || document.getElementById('sku-si')?.value.trim();
+  const qtd     = parseFloat(document.getElementById('qtd-si')?.value)||0;
+  const custo   = parseFloat(document.getElementById('custo-si')?.value)||0;
+  if (tipo!=='tanque'&&!sku) throw new Error('Informe o produto');
+  if (tipo!=='tanque'&&!qtd) throw new Error('Informe a quantidade');
+  if (tipo==='ret_campo'&&!cliente) throw new Error('Informe o cliente');
+  if (tipo==='estoque') {
+    await api('saldo_inicial_estoque',{sku,qtd,empresa,custo_unitario:custo,registrado_por:NOME});
+  } else if (tipo==='ret_patio'||tipo==='ret_campo') {
+    await api('saldo_inicial_ret',{sku,qtd,empresa,destino:tipo==='ret_campo'?cliente:'Pátio CD',registrado_por:NOME});
+  } else if (tipo==='tanque') {
+    await api('entrada_tanque',{litros:qtd,preco_litro:custo,fornecedor:'Saldo Inicial',empresa:'Master',registrado_por:NOME,obs:'Inventário 27/04'});
+  }
+  toast('✓ Saldo inicial lançado','ok');
+  voltarForm();
+}
+
+async function submitOcorrencia() {
+  const cliente = document.getElementById('cli-oc')?.value.trim();
+  const tipo    = document.getElementById('tipo-oc')?.value;
+  const obs     = document.getElementById('obs-oc')?.value.trim();
+  if (!cliente) throw new Error('Informe o cliente');
+  if (!obs)     throw new Error('Descreva a ocorrência');
+  // Registra na aba retornáveis como ajuste 0 com obs detalhada
+  await api('ajuste_retornavel',{sku:'OCORRENCIA',qtd:0,destino:cliente,empresa:'Master',
+    obs:`OCORRÊNCIA [${tipo}]: ${obs}`,registrado_por:NOME});
+  toast('✓ Ocorrência registrada — comercial notificado','ok');
+  voltarForm();
+}
+
+// ──────────────────────────────────────────────────────────────
+// PENDÊNCIAS
+// ──────────────────────────────────────────────────────────────
+async function carregarPendencias(papel) {
+  const el = document.getElementById('pend-'+papel);
+  if (!el) return;
+  el.innerHTML = '<div class="empty"><div class="empty-icon">⌛</div><div class="empty-txt">Carregando...</div></div>';
+  try {
+    const [r1,r2] = await Promise.all([
+      apiGet('retornaveis?status=pendente'),
+      apiGet('estoque?status=pendente'),
+    ]);
+    let pends = [];
+    if (papel==='patio') {
+      pends = (r1.dados||[]).filter(p=>p.origem_registro==='motorista'||String(p.registrado_por||'').toLowerCase().includes('motor'));
+    } else {
+      const rd = (r1.dados||[]).filter(p=>p.origem_registro==='patio_distribuidor');
+      pends = [...rd,...(r2.dados||[])];
+    }
+    if (!pends.length) {
+      el.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-txt">Sem pendências</div></div>';
+      return;
+    }
+    el.innerHTML='<div class="pend-list">'+pends.map(p=>renderPend(p,papel)).join('')+'</div>';
+  } catch(e) {
+    el.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-txt" onclick="carregarPendencias(\''+papel+'\')">Erro — toque para tentar novamente</div></div>';
+  }
+}
+
+function renderPend(p,papel) {
+  const isRet = p.destino!==undefined;
+  const tag   = isRet?'tag-ret':'tag-est';
+  const label = isRet?'Retorno vasilhame':'Entrada estoque';
+  const quem  = p.destino||p.fornecedor||p.cliente||'—';
+  const item  = (p.sku||'')+(p.qtd?' × '+p.qtd:'');
+  const por   = p.registrado_por?`por ${p.registrado_por}`:'';
+  const aba   = isRet?'retornaveis':'estoque';
+  return `<div class="pend-card" id="pc-${p.id}">
+    <div class="pend-head">
+      <div><div class="pend-tag ${tag}">${label}</div><div class="pend-cliente">${quem}</div></div>
+      <div class="pend-id">${(p.id||'').slice(-6)}</div>
+    </div>
+    <div class="pend-body">
+      <div class="pend-itens">${item}</div>
+      <div class="pend-meta">${por}</div>
+      <div class="pend-btns">
+        <button class="pbtn pbtn-ok" onclick="valPend('${p.id}','${aba}','validado','${papel}')">✓ Confirmar</button>
+        <button class="pbtn pbtn-edit" onclick="editPend('${p.id}','${aba}','${papel}')">✏ Corrigir</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function valPend(id,aba,status,papel) {
+  const card=document.getElementById('pc-'+id);
+  if(card){card.style.opacity='.4';card.style.pointerEvents='none';}
+  try {
+    await api('validar_pendencia',{id,aba,status,validado_por:NOME});
+    card?.remove();
+    toast(status==='validado'?'✓ Confirmado com sucesso':'✓ Rejeitado','ok');
+    const cont=document.getElementById('pend-'+papel);
+    if(cont&&!cont.querySelector('.pend-card')) cont.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-txt">Sem pendências</div></div>';
+  } catch(e) {
+    if(card){card.style.opacity='1';card.style.pointerEvents='';}
+    toast('Erro: '+e.message,'err');
+  }
+}
+
+async function editPend(id,aba,papel) {
+  const nova=prompt('Nova quantidade:');
+  if(!nova||isNaN(nova)) return;
+  try {
+    await api('validar_pendencia',{id,aba,status:'validado',qtd_corrigida:parseFloat(nova),validado_por:NOME});
+    document.getElementById('pc-'+id)?.remove();
+    toast('✓ Validado com qtd corrigida: '+nova,'ok');
+  } catch(e) { toast('Erro: '+e.message,'err'); }
+}
+
+// ──────────────────────────────────────────────────────────────
+// TANQUE
+// ──────────────────────────────────────────────────────────────
+async function carregarSaldoTanque() {
+  try {
+    const r = await apiGet('tanque_saldo');
+    const el= document.getElementById('tanque-sub');
+    if(el&&r.dados) {
+      const s=r.dados.saldo||0;
+      el.textContent=`Saldo atual: ${s}L  ·  Custo médio: R$ ${(r.dados.custo_medio_litro||0).toFixed(2).replace('.',',')}`;
+      el.style.color=s<300?'var(--r)':'var(--ink3)';
+    }
+  } catch(e){}
+}
+
+// ──────────────────────────────────────────────────────────────
+// API
+// ──────────────────────────────────────────────────────────────
+async function api(acao,dados) {
+  const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao,dados})});
+  const j=await r.json();
+  if(!j.ok) throw new Error(j.erro||'Erro desconhecido');
+  return j;
+}
+async function apiGet(ep) {
+  const r=await fetch(`${API}?endpoint=${ep}`);
+  return r.json();
+}
+
+// ──────────────────────────────────────────────────────────────
+// TOAST
+// ──────────────────────────────────────────────────────────────
+function toast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast '+type; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3500);
+}
 </script>
 </body>
 </html>
