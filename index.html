@@ -1262,54 +1262,41 @@ async function submitOcorrencia() {
 async function carregarPendencias(papel) {
   const el = document.getElementById('pend-'+papel);
   if (!el) return;
-  el.innerHTML = '<div class="empty"><div class="empty-icon">⌛</div><div class="empty-txt">Carregando...</div></div>';
+  el.innerHTML = '<div class="empty"><div class="empty-icon">&#8987;</div><div class="empty-txt">Carregando...</div></div>';
   try {
-    // Buscar todos pendentes de retornável e estoque
     const [r1, r2] = await Promise.all([
       apiGet('retornaveis?status=pendente'),
       apiGet('estoque?status=pendente'),
     ]);
     const retPend = r1.dados||[];
     const estPend = r2.dados||[];
-
     let pends = [];
 
     if (papel === 'patio') {
-      // PÁTIO valida:
-      // 1. Retornáveis registrados pelo motorista (origem_registro=motorista)
-      // 2. Retornáveis sem validador (registros legado — assumir que vão para pátio primeiro)
-      // NÃO inclui registros do próprio pátio (que vão direto ao comercial)
       pends = retPend.filter(p => {
-        const val  = String(p.validador||'').toLowerCase();
-        const orig = String(p.origem_registro||'').toLowerCase();
-        // Vai para patio se: validador=patio, OU origem=motorista
-        // OU sem validador E sem origem (legado - mostra para patio como primeiro filtro)
-        if (val === 'patio') return true;
-        if (orig === 'motorista') return true;
-        if (!val && !orig) return true; // legado: mostra tudo no patio primeiro
-        return false;
+        const val  = String(p.validador||'').toLowerCase().trim();
+        const orig = String(p.origem_registro||'').toLowerCase().trim();
+        return val === 'patio' || orig === 'motorista' || (!val && !orig);
       });
-
     } else if (papel === 'comercial') {
-      // COMERCIAL valida:
-      // 1. Retornaveis registrados pelo patio (distribuidor/PDV chegou no CD)
-      // 2. Entradas de estoque com NF (toda entrada de compra)
-      const retComercial = retPend.filter(p => {
-        const val  = String(p.validador||'').toLowerCase();
-        const orig = String(p.origem_registro||'').toLowerCase();
-        return val === 'comercial' || orig === 'patio_distribuidor';
+      const retCom = retPend.filter(p => {
+        const val  = String(p.validador||'').toLowerCase().trim();
+        const orig = String(p.origem_registro||'').toLowerCase().trim();
+        return val === 'comercial' || orig === 'patio_distribuidor' || (!val && !orig);
       });
-      pends = [...retComercial, ...estPend];
+      pends = [...retCom, ...estPend];
     }
 
     if (!pends.length) {
-      el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div class="empty-txt">Sem pendências no momento</div></div>';
+      el.innerHTML = '<div class="empty"><div class="empty-icon">&#10003;</div><div class="empty-txt">Sem pendencias no momento</div></div>';
       return;
     }
     el.innerHTML = '<div class="pend-list">' + pends.map(p => renderPend(p, papel)).join('') + '</div>';
-
   } catch(e) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-txt" onclick="carregarPendencias('${papel}')">Erro — toque para tentar novamente</div></div>`;
+    console.error('Erro pendencias:', e);
+    const errMsg = '<div class="empty"><div class="empty-icon">!</div><div class="empty-txt">Erro - toque para atualizar</div></div>';
+    el.innerHTML = errMsg;
+    el.onclick = function(){ carregarPendencias(papel); };
   }
 }
 
