@@ -735,9 +735,9 @@ function formDefs(tipo) {
         <div class="fg"><label><span class="req">*</span> Fornecedor${isFab?' / Fábrica':''}</label>
           <input id="forn-ee" type="text" placeholder="${isFab?'Ex: Fábrica Leme':'Ex: Fornecedor SA'}">
         </div>
-        <div class="slabel">Produtos recebidos</div>
+        <div class="slabel">${isFab?'Barris / Produtos recebidos':'Produtos recebidos'}</div>
         <div class="items-wrap" id="itens-ee"></div>
-        <button class="btn-add" onclick="addItem('itens-ee',true)">+ Adicionar produto</button>
+        <button class="btn-add" onclick="addItem('itens-ee',${isFab?'false':'true'})">+ Adicionar produto</button>
         ${isFab ? `<div class="fg"><label>Barris que ficaram na fábrica (se houver)</label>
           <input type="number" id="ficaram-ee" placeholder="0" min="0"></div>` : ''}
         <div class="fg"><label>Observação</label>
