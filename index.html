@@ -711,11 +711,9 @@ function formDefs(tipo) {
       botao: 'Registrar — enviar para comercial',
       html:`
         <div class="warn-box">⚠️ Aguardará validação do <strong>Comercial</strong>.</div>
-        <div class="row2">
-          <div class="fg"><label>Operação</label>${selectEmpresa('emp-ee')}</div>
-          <div class="fg"><label><span class="req">*</span> Fornecedor${isFab?' / Fábrica':''}</label>
-            <input id="forn-ee" type="text" placeholder="${isFab?'Ex: Fábrica Leme':'Ex: Fornecedor SA'}">
-          </div>
+        <div class="fg"><label>Operação</label>${selectEmpresa('emp-ee')}</div>
+        <div class="fg"><label><span class="req">*</span> Fornecedor${isFab?' / Fábrica':''}</label>
+          <input id="forn-ee" type="text" placeholder="${isFab?'Ex: Fábrica Leme':'Ex: Fornecedor SA'}">
         </div>
         <div class="slabel">Produtos recebidos</div>
         <div class="items-wrap" id="itens-ee"></div>
@@ -791,8 +789,8 @@ function formDefs(tipo) {
         <div class="fg"><label><span class="req">*</span> Km atual</label>
           <input type="number" id="kma-ab" placeholder="Ex: 45.350" min="0" oninput="calcAbast()">
         </div>
-        <div class="fg"><label>Km anterior</label>
-          <input type="number" id="kmb-ab" placeholder="Anterior" min="0" oninput="calcAbast()">
+        <div class="fg"><label>Km anterior (automático)</label>
+          <input type="number" id="kmb-ab" placeholder="Preenche sozinho" min="0" oninput="calcAbast()" readonly style="background:var(--g2);color:var(--g)">
         </div>
       </div>
       <div id="calc-ab-box" class="calc-box" style="display:none"></div>
@@ -811,6 +809,20 @@ function formDefs(tipo) {
       }
       document.getElementById('mot-ab').value = NOME;
       updatePrecoCampo();
+      // Buscar km anterior ao selecionar veículo
+      sel?.addEventListener('change', async () => {
+        const placa = sel.value;
+        if (!placa) return;
+        try {
+          const r = await apiGet('abastecimento?placa='+encodeURIComponent(placa));
+          const movs = (r.dados||[]).filter(m=>m.km_atual>0).sort((a,b)=>b.km_atual-a.km_atual);
+          const kmAnt = document.getElementById('kmb-ab');
+          if (kmAnt && movs.length) {
+            kmAnt.value = movs[0].km_atual;
+            calcAbast();
+          }
+        } catch(e){}
+      });
     },
     submit: submitAbastecimento,
   };
@@ -1252,31 +1264,42 @@ async function carregarPendencias(papel) {
   if (!el) return;
   el.innerHTML = '<div class="empty"><div class="empty-icon">⌛</div><div class="empty-txt">Carregando...</div></div>';
   try {
+    // Buscar todos pendentes de retornável e estoque
     const [r1, r2] = await Promise.all([
       apiGet('retornaveis?status=pendente'),
       apiGet('estoque?status=pendente'),
     ]);
+    const retPend = r1.dados||[];
+    const estPend = r2.dados||[];
 
     let pends = [];
 
     if (papel === 'patio') {
-      // Pátio valida: retornáveis com validador=patio OU origem=motorista OU sem validador (legado)
-      pends = (r1.dados||[]).filter(p => {
-        const val = String(p.validador||'').toLowerCase();
+      // PÁTIO valida:
+      // 1. Retornáveis registrados pelo motorista (origem_registro=motorista)
+      // 2. Retornáveis sem validador (registros legado — assumir que vão para pátio primeiro)
+      // NÃO inclui registros do próprio pátio (que vão direto ao comercial)
+      pends = retPend.filter(p => {
+        const val  = String(p.validador||'').toLowerCase();
         const orig = String(p.origem_registro||'').toLowerCase();
-        return val === 'patio' || orig === 'motorista' || (!val && !orig);
+        // Vai para pátio se: validador=patio, OU origem=motorista
+        // OU sem validador E sem origem (legado — mostra para pátio como primeiro filtro)
+        if (val === 'patio') return true;
+        if (orig === 'motorista') return true;
+        if (!val && !orig) return true; // legado: mostra tudo no pátio primeiro
+        return false;
       });
 
     } else if (papel === 'comercial') {
-      // Comercial valida: retornáveis com validador=comercial OU origem=patio_distribuidor
-      // E entradas de estoque pendentes
-      const retPend = (r1.dados||[]).filter(p => {
+      // COMERCIAL valida:
+      // 1. Retornáveis registrados pelo pátio (distribuidor/PDV chegou no CD)
+      // 2. Entradas de estoque com NF (toda entrada de compra)
+      const retComercial = retPend.filter(p => {
         const val  = String(p.validador||'').toLowerCase();
         const orig = String(p.origem_registro||'').toLowerCase();
         return val === 'comercial' || orig === 'patio_distribuidor';
       });
-      const estPend = (r2.dados||[]);
-      pends = [...retPend, ...estPend];
+      pends = [...retComercial, ...estPend];
     }
 
     if (!pends.length) {
@@ -1292,14 +1315,21 @@ async function carregarPendencias(papel) {
 
 function renderPend(p,papel) {
   const isRet = p.tipo_mov !== undefined && p.destino !== undefined;
-  const tag   = isRet?'tag-ret':'tag-est';
-  const label = isRet ? 'Retorno vasilhame' : 'Entrada estoque';
-  const quem  = p.destino||p.fornecedor||p.cliente||'—';
+  const tag   = isRet ? 'tag-ret' : 'tag-est';
+  // Label descritivo por origem
+  const orig  = String(p.origem_registro||'').toLowerCase();
+  let label;
+  if (!isRet)                          label = 'Entrada estoque';
+  else if (orig==='motorista')         label = 'Retorno em rota';
+  else if (orig==='patio_distribuidor') label = 'Devolução no pátio';
+  else                                  label = 'Retorno vasilhame';
+
+  const quem     = p.destino||p.fornecedor||p.cliente||'—';
   const prodNome = p.produto || p.sku || '';
-  const item  = prodNome + (p.qtd ? ' × ' + p.qtd : '');
-  const por   = p.registrado_por ? 'por ' + p.registrado_por : '';
-  const data  = p.data ? p.data : '';
-  const aba   = isRet ? 'retornaveis' : 'estoque';
+  const item     = prodNome + (p.qtd ? ' × ' + p.qtd : '');
+  const por      = p.registrado_por ? 'por ' + p.registrado_por : '';
+  const data     = p.data || '';
+  const aba      = isRet ? 'retornaveis' : 'estoque';
   return `<div class="pend-card" id="pc-${p.id}">
     <div class="pend-head">
       <div><div class="pend-tag ${tag}">${label}</div><div class="pend-cliente">${quem}</div></div>
