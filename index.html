@@ -7,15 +7,6 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Harden — Operações</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --g:#0F6E56;--g1:#0a5240;--g2:#E1F5EE;--g3:#A7F3D0;
   --a:#D97706;--a2:#FEF3C7;--a3:#FDE68A;
@@ -38,12 +29,13 @@ body{min-height:100dvh;display:flex;flex-direction:column}
 .role-chip:hover{background:rgba(255,255,255,.25)}
 
 /* ── Screens ──────────────────────────────────────────── */
-.screen{display:none;flex:1;flex-direction:column;animation:fi .18s ease}
+.screen{display:none;flex:1;flex-direction:column;animation:fi .18s ease;align-items:center}
 .screen.active{display:flex}
+.screen > .main, .screen > .form-wrap, .screen > .role-screen{width:100%}
 @keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 
 /* ── Role select ──────────────────────────────────────── */
-.role-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 18px;gap:22px}
+.role-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 18px;gap:22px;max-width:480px;margin:0 auto;width:100%}
 .role-title{font-size:21px;font-weight:700;text-align:center}
 .role-hint{font-size:13px;color:var(--ink3);text-align:center;margin-top:-14px}
 .role-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:400px}
@@ -54,7 +46,7 @@ body{min-height:100dvh;display:flex;flex-direction:column}
 .role-desc{font-size:11px;color:var(--ink3);margin-top:2px;line-height:1.35}
 
 /* ── Main layout ──────────────────────────────────────── */
-.main{flex:1;display:flex;flex-direction:column;max-width:520px;margin:0 auto;width:100%}
+.main{flex:1;display:flex;flex-direction:column;max-width:480px;margin:0 auto;width:100%}
 .content{flex:1;padding:14px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
 
 /* ── Section label ────────────────────────────────────── */
@@ -75,14 +67,14 @@ body{min-height:100dvh;display:flex;flex-direction:column}
 .ic-red{background:var(--r2);color:var(--r)}
 
 /* ── Formulário ───────────────────────────────────────── */
-.form-wrap{background:var(--bg2);flex:1;display:flex;flex-direction:column}
+.form-wrap{background:var(--bg2);flex:1;display:flex;flex-direction:column;max-width:480px;margin:0 auto;width:100%}
 .form-header{padding:14px 16px;display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--bd);background:var(--bg2);position:sticky;top:56px;z-index:100}
 .btn-back{width:34px;height:34px;border-radius:50%;background:var(--bg);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;color:var(--ink2);flex-shrink:0;transition:background .15s}
 .btn-back:hover{background:var(--bd)}
 .fh-info{}
 .fh-title{font-size:16px;font-weight:700}
 .fh-sub{font-size:11px;color:var(--ink3)}
-.form-body{padding:16px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+.form-body{padding:16px 18px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
 
 /* ── Campos ───────────────────────────────────────────── */
 .fg{display:flex;flex-direction:column;gap:5px}
@@ -163,7 +155,7 @@ textarea{resize:vertical;min-height:64px}
 
 /* ── Segmented (tipo cliente) ─────────────────────────── */
 .seg{display:flex;background:var(--bg);border:1.5px solid var(--bd);border-radius:var(--rad3);overflow:hidden}
-.seg-btn{flex:1;padding:9px 4px;border:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:var(--ink3);cursor:pointer;transition:all .15s;text-align:center}
+.seg-btn{flex:1;padding:9px 6px;border:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;color:var(--ink3);cursor:pointer;transition:all .15s;text-align:center;white-space:nowrap}
 .seg-btn.active{background:var(--g);color:#fff}
 </style>
 </head>
@@ -239,6 +231,21 @@ if (document.readyState === 'loading') {
   </div>
 </div>
 <div class="toast" id="toast"></div>
+
+<!-- Modal de nome -->
+<div id="modal-nome" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:24px 20px;width:90%;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px" id="modal-nome-titulo">Seu nome</div>
+    <div style="font-size:13px;color:#6B7280;margin-bottom:14px" id="modal-nome-sub">Para identificar seus lançamentos</div>
+    <input id="modal-nome-input" type="text" placeholder="Digite seu nome..."
+      style="width:100%;border:1.5px solid #E5E7EB;border-radius:8px;padding:10px 12px;font-size:15px;font-family:'DM Sans',sans-serif;outline:none;margin-bottom:14px"
+      onkeydown="if(event.key==='Enter') confirmarNome()">
+    <button onclick="confirmarNome()"
+      style="width:100%;padding:12px;background:#0F6E56;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">
+      Confirmar
+    </button>
+  </div>
+</div>
 
 <!-- ═══════════════════════════════════════════════════
      TELA: SELEÇÃO DE PAPEL
@@ -518,15 +525,42 @@ function setPapel(papel) {
   const labels = {motorista:'Motorista',patio:'Pátio',comercial:'Comercial',operacional:'Operacional'};
   NOME = localStorage.getItem('harden_nome_'+papel) || '';
   if (!NOME) {
-    NOME = prompt('Seu nome ('+ labels[papel] +'):') || papel;
-    localStorage.setItem('harden_nome_'+papel, NOME);
+    // Mostrar modal de nome em vez de prompt()
+    const modal = document.getElementById('modal-nome');
+    const inp   = document.getElementById('modal-nome-input');
+    document.getElementById('modal-nome-titulo').textContent = labels[papel];
+    document.getElementById('modal-nome-sub').textContent = 'Como você quer ser identificado nos lançamentos?';
+    modal.style.display = 'flex';
+    inp.value = '';
+    setTimeout(() => inp.focus(), 100);
+    // Guardar papel para usar no confirmarNome()
+    window._papelPendente = papel;
+    return; // aguarda confirmação do modal
   }
-  document.getElementById('role-chip-txt').textContent = labels[papel]+' · '+NOME;
+  _ativarPapel(papel, NOME);
+}
+
+function confirmarNome() {
+  const inp   = document.getElementById('modal-nome-input');
+  const nome  = inp.value.trim();
+  if (!nome) { inp.style.borderColor='#DC2626'; inp.focus(); return; }
+  inp.style.borderColor = '#E5E7EB';
+  document.getElementById('modal-nome').style.display = 'none';
+  const papel = window._papelPendente || PAPEL;
+  localStorage.setItem('harden_nome_'+papel, nome);
+  _ativarPapel(papel, nome);
+}
+
+function _ativarPapel(papel, nome) {
+  PAPEL = papel;
+  NOME  = nome;
+  const labels = {motorista:'Motorista',patio:'Pátio',comercial:'Comercial',operacional:'Operacional'};
+  document.getElementById('role-chip-txt').textContent = labels[papel]+' · '+nome;
   document.getElementById('role-chip').style.display = 'flex';
   mostrarTela(papel);
   _telaAnterior = papel;
-  if (papel==='patio')     carregarPendencias('patio');
-  if (papel==='comercial') carregarPendencias('comercial');
+  if (papel==='patio')      carregarPendencias('patio');
+  if (papel==='comercial')  carregarPendencias('comercial');
   if (papel==='operacional') carregarSaldoTanque();
 }
 
