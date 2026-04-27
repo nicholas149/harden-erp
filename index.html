@@ -509,6 +509,32 @@ function opsProd(q) {
     .map(p => ({label:p.sku+' — '+p.nome, meta:p.cat, value:p.sku, ...p}));
 }
 
+// Opções de barril pelo TAMANHO — para retorno de vasilhame
+// O vasilhame é o barril, independente do produto que estava dentro
+const BARRIS_PADRAO = [
+  {label:'Barril 10L', value:'BARRIL-10L', nome:'Barril 10L', litros:10},
+  {label:'Barril 15L', value:'BARRIL-15L', nome:'Barril 15L', litros:15},
+  {label:'Barril 20L', value:'BARRIL-20L', nome:'Barril 20L', litros:20},
+  {label:'Barril 30L', value:'BARRIL-30L', nome:'Barril 30L', litros:30},
+  {label:'Barril 50L', value:'BARRIL-50L', nome:'Barril 50L', litros:50},
+];
+
+function opsBarril(q) {
+  // Buscar barris padrão + equipamentos retornáveis
+  const barris = BARRIS_PADRAO.filter(b =>
+    !q || b.label.toLowerCase().includes(q)
+  ).map(b => ({...b, meta:'barril'}));
+
+  // Adicionar equipamentos (chopeira, CO2, manometro) da lista de produtos
+  const equip = PRODUTOS
+    .filter(p => p.ret==='Sim' && p.tipo_ret !== 'barril' &&
+      ((p.nome||'').toLowerCase().includes(q) || !q))
+    .slice(0,4)
+    .map(p => ({label:p.sku+' — '+p.nome, value:p.sku, nome:p.nome, meta:p.tipo_ret||'equip'}));
+
+  return [...barris, ...equip].slice(0,8);
+}
+
 // ──────────────────────────────────────────────────────────────
 // NAVEGAÇÃO
 // ──────────────────────────────────────────────────────────────
@@ -873,7 +899,11 @@ function formDefs(tipo) {
       <div id="calc-si-box" class="calc-box" style="display:none"></div>`,
     init: () => {
       criarAC(document.getElementById('cli-si'), q=>opsCli(q), opt=>{ document.getElementById('cli-si')._id=opt.value; });
-      criarAC(document.getElementById('sku-si'), q=>opsProd(q), opt=>{ document.getElementById('sku-si')._sku=opt.value; });
+      // Saldo inicial: tipo estoque usa opsProd, tipo retornavel usa opsBarril
+      criarAC(document.getElementById('sku-si'), q=>{
+        const tipo = document.getElementById('tipo-si')?.value||'estoque';
+        return tipo.startsWith('ret') ? opsBarril(q) : opsProd(q);
+      }, opt=>{ document.getElementById('sku-si')._sku=opt.value; });
     },
     submit: submitSaldoInicial,
   };
@@ -951,8 +981,8 @@ function addItem(containerId, comPreco=false) {
   d.innerHTML = `
     <div class="item-row-top">
       <div class="fg" style="flex:1">
-        <label>Produto / SKU</label>
-        <div><input id="ip-sku-${n}" type="text" autocomplete="off" placeholder="Digitar SKU ou nome..."></div>
+        <label id="ip-lbl-${n}">Produto / SKU</label>
+        <div><input id="ip-sku-${n}" type="text" autocomplete="off" placeholder="Ex: Barril 50L, Barril 30L..."></div>
       </div>
       <button class="btn-rm" onclick="document.getElementById('item-${n}').remove()">×</button>
     </div>
