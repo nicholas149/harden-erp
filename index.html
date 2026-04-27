@@ -178,21 +178,36 @@ function carregarDados() {
   _dadosPromise = (async () => {
     document.getElementById('loading-ind').style.display='block';
     try {
-      const [rc, rp, rf] = await Promise.all([
+      const [rc, rp, rf] = await Promise.allSettled([
         fetch(API+'?endpoint=clientes').then(r=>r.json()),
         fetch(API+'?endpoint=produtos').then(r=>r.json()),
         fetch(API+'?endpoint=frota').then(r=>r.json()),
-      ]);
+      ]).then(results => results.map(r => r.status==='fulfilled' ? r.value : {ok:false,dados:[]}));
       CLIENTES = (rc.dados||[]).map(x=>({id:x.id, nome:x.nome_canonico, tipo:x.tipo||''}));
       PRODUTOS  = (rp.dados||[]).map(x=>({sku:x.sku, nome:x.nome_canonico, cat:x.categoria, ret:x.retornavel, tipo_ret:x.tipo_retorno, litros:x.litros_barril}));
-      VEICULOS  = (rf.dados||[])
-        .filter(v=>String(v.ativo||'Sim').toLowerCase()!=='não')
-        .map(v=>({
-          placa:   String(v.placa||'').toUpperCase(),
-          modelo:  v.modelo||'',
-          empresa: v.empresa||'Master',
-          motorista: v.motorista_fixo||'',
-        }));
+      // Carregar veículos — com fallback se endpoint ainda não estiver publicado
+      if (rf.ok && rf.dados?.length) {
+        VEICULOS = rf.dados
+          .filter(v=>String(v.ativo||'Sim').toLowerCase()!=='não')
+          .map(v=>({
+            placa:    String(v.placa||'').toUpperCase(),
+            modelo:   v.modelo||'',
+            empresa:  v.empresa||'Master',
+            motorista:v.motorista_fixo||'',
+          }));
+      } else {
+        // Fallback enquanto o endpoint frota não for publicado
+        VEICULOS = [
+          {placa:'ABC-1234',modelo:'VW Delivery 11.180',empresa:'Master',motorista:''},
+          {placa:'DEF-5678',modelo:'VW Delivery 9.170', empresa:'Master',motorista:''},
+          {placa:'GHI-9012',modelo:'Fiat Ducato 2.3',   empresa:'Master',motorista:''},
+          {placa:'JKL-3456',modelo:'Renault Master 2.3',empresa:'Master',motorista:''},
+          {placa:'MNO-7890',modelo:'Ford Cargo 816',    empresa:'Master',motorista:''},
+          {placa:'PQR-1234',modelo:'Mercedes Sprinter', empresa:'Winechopp',motorista:''},
+          {placa:'STU-5678',modelo:'VW Delivery 6.160', empresa:'Winechopp',motorista:''},
+        ];
+        console.warn('Endpoint frota não disponível — usando lista padrão. Publique nova versão do Apps Script.');
+      }
     } catch(e) { console.warn('Erro carregando dados:', e); }
     finally { document.getElementById('loading-ind').style.display='none'; }
   })();
