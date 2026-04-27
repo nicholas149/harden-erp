@@ -908,7 +908,7 @@ function formDefs(tipo) {
     titulo:'Ajuste de Estoque', sub:'Correção por inventário ou quebra',
     botao:'Registrar ajuste — enviar para validação',
     html:`
-      <div class="fg"><label>Operação</label>${selectEmpresa('emp-aj')}</div>
+
       <div class="fg"><label><span class="req">*</span> Produto</label>
         <div><input id="sku-aj" type="text" autocomplete="off"></div>
       </div>
@@ -948,7 +948,7 @@ function formDefs(tipo) {
           <option value="tanque">Diesel no tanque</option>
         </select>
       </div>
-      <div class="fg"><label>Operação</label>${selectEmpresa('emp-si')}</div>
+
       <div class="fg" id="cli-si-wrap" style="display:none">
         <label><span class="req">*</span> Cliente (para retornável em campo)</label>
         <div><input id="cli-si" type="text" autocomplete="off"></div>
@@ -1274,7 +1274,7 @@ async function submitAjusteEstoque() {
 
 async function submitSaldoInicial() {
   const tipo    = document.getElementById('tipo-si')?.value;
-  const empresa = document.getElementById('emp-si')?.value;
+  const empresa = 'Master';
   const cliente = document.getElementById('cli-si')?.value.trim();
   const sku     = document.getElementById('sku-si')?._sku || document.getElementById('sku-si')?.value.trim();
   const qtd     = parseFloat(document.getElementById('qtd-si')?.value)||0;
@@ -1315,11 +1315,12 @@ async function carregarPendencias(papel) {
   el.innerHTML = '<div class="empty"><div class="empty-icon">&#8987;</div><div class="empty-txt">Carregando...</div></div>';
   try {
     const [r1, r2] = await Promise.all([
-      apiGet('retornaveis?status=pendente'),
-      apiGet('estoque?status=pendente'),
+      apiGet('retornaveis'),
+      apiGet('estoque'),
     ]);
-    const retPend = r1.dados||[];
-    const estPend = r2.dados||[];
+    // Filtrar pendentes no cliente (evita problema de params na URL)
+    const retPend = (r1.dados||[]).filter(m => String(m.status||'').toLowerCase() === 'pendente');
+    const estPend = (r2.dados||[]).filter(m => String(m.status||'').toLowerCase() === 'pendente');
     let pends = [];
 
     if (papel === 'patio') {
@@ -1437,11 +1438,18 @@ async function api(acao,dados) {
   if (!j.ok) throw new Error(j.erro||'Erro desconhecido');
   return j;
 }
-async function apiGet(ep) {
-  const r = await fetch(`${API}?endpoint=${ep}`, {
-    method: 'GET',
-    redirect: 'follow',
-  });
+async function apiGet(ep, params) {
+  let endpoint = ep;
+  let extra = '';
+  if (ep.includes('?')) {
+    const parts = ep.split('?');
+    endpoint = parts[0];
+    extra = '&' + parts[1];
+  }
+  if (params && typeof params === 'object') {
+    extra += '&' + Object.entries(params).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+  }
+  const r = await fetch(API+'?endpoint='+endpoint+extra, {redirect:'follow'});
   return r.json();
 }
 
