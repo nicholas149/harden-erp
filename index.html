@@ -1155,6 +1155,23 @@ async function handleSub() {
   }
 }
 
+async function submitSaidaFabrica() {
+  const fabrica = document.getElementById('fab-sf')?.value;
+  const itens   = coletarItens('itens-sf');
+  const obs     = document.getElementById('obs-sf')?.value || '';
+  if (!fabrica) throw new Error('Selecione a fábrica de destino');
+  if (!itens.length) throw new Error('Adicione ao menos um barril');
+  await api('saida_fabrica', {
+    fabrica,
+    empresa: 'Master',
+    itens: itens.map(it => ({sku: it.sku, qtd: it.qtd})),
+    registrado_por: NOME,
+    obs,
+  });
+  toast('Envio para ' + fabrica + ' registrado', 'ok');
+  voltarForm();
+}
+
 async function submitRetornoMotorista() {
   const cliente = document.getElementById('cli-rm')?.value.trim();
   const cliId   = document.getElementById('cli-rm')?._id||'';
@@ -1187,90 +1204,42 @@ async function submitRetornoPatio() {
 }
 
 async function submitEntradaEstoque(isFab=false) {
-  const empresa  = document.getElementById('emp-ee')?.value;
-  const forn     = document.getElementById('forn-ee')?.value.trim();
-  const ficaram  = isFab ? parseFloat(document.getElementById('ficaram-ee')?.value)||0 : 0;
-  const itens    = coletarItens('itens-ee', true);
-  const obs      = document.getElementById('obs-ee')?.value;
-  if (!forn) throw new Error('Informe o fornecedor'+(isFab?' / fábrica':''));
+  const forn  = (document.getElementById('forn-ee')?._fornNome || document.getElementById('forn-ee')?.value || '').trim();
+  const itens = coletarItens('itens-ee', !isFab); // com preco apenas para entrada compra
+  const obs   = document.getElementById('obs-ee')?.value || '';
+  const emp   = document.getElementById('emp-ee')?.value || 'Master';
+
+  if (!forn) throw new Error('Informe o fornecedor' + (isFab ? ' / fábrica' : ''));
   if (!itens.length) throw new Error('Adicione ao menos um produto');
-  for (const it of itens) {
-    await api('entrada_estoque',{
-      sku:it.sku, qtd:it.qtd, preco_unitario:it.preco_unitario,
-      tipo_mov: isFab ? 'Entrada Fábrica' : 'Entrada Compra',
-      empresa, fornecedor:forn,
-      registrado_por:NOME,
-      obs: obs + (ficaram>0&&isFab ? ` | ${ficaram} barris ficaram em ${forn}` : ''),
+
+  if (isFab) {
+    // CHEGADA DA FÁBRICA → endpoint dedicado
+    const r = await api('chegada_fabrica', {
+      fabrica: forn,
+      empresa: emp,
+      itens: itens.map(it => ({sku: it.sku, qtd: it.qtd})),
+      registrado_por: NOME,
+      obs,
     });
-    if (isFab) {
-      await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,tipo_mov:'Entrada Fábrica',destino:forn,empresa,validacao:'direto',registrado_por:NOME});
+    toast('Chegada de ' + forn + ' registrada — aguarda validação', 'ok');
+  } else {
+    // ENTRADA DE COMPRA → uma linha por item
+    for (const it of itens) {
+      await api('entrada_estoque', {
+        sku: it.sku, qtd: it.qtd,
+        preco_unitario: it.preco_unitario || 0,
+        tipo_mov: 'Entrada Compra',
+        empresa: emp,
+        fornecedor: forn,
+        registrado_por: NOME,
+        obs,
+      });
     }
+    toast('Entrada de estoque registrada — aguarda validação', 'ok');
   }
-  toast('✓ Entrada registrada — aguarda validação do comercial','ok');
   voltarForm();
 }
 
-async function submitSaidaFabrica() {
-  const empresa = document.getElementById('emp-sf')?.value;
-  const fabrica = document.getElementById('fab-sf')?.value;
-  const itens   = coletarItens('itens-sf');
-  const obs     = document.getElementById('obs-sf')?.value;
-  if (!itens.length) throw new Error('Adicione ao menos um SKU');
-  for (const it of itens) {
-    await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,tipo_mov:'Saída Fábrica',destino:fabrica,empresa,registrado_por:NOME,obs});
-    await api('ajuste_estoque',{sku:it.sku,qtd:it.qtd,positivo:false,empresa,motivo:'Saída para '+fabrica,registrado_por:NOME});
-  }
-  toast('✓ Envio para fábrica registrado','ok');
-  voltarForm();
-}
-
-async function submitAbastecimento() {
-  const placa  = document.getElementById('vei-ab')?.value;
-  const origem = document.getElementById('orig-ab')?.value;
-  const litros = parseFloat(document.getElementById('lit-ab')?.value)||0;
-  const preco  = parseFloat(document.getElementById('preco-ab')?.value)||0;
-  const kma    = parseFloat(document.getElementById('kma-ab')?.value)||0;
-  const kmb    = parseFloat(document.getElementById('kmb-ab')?.value)||0;
-  const mot    = document.getElementById('mot-ab')?.value;
-  const obs    = document.getElementById('obs-ab')?.value;
-  const vei    = VEICULOS.find(v=>v.placa===placa);
-  if (!placa) throw new Error('Selecione o veículo');
-  if (!litros) throw new Error('Informe os litros');
-  if (origem==='posto'&&!preco) throw new Error('Informe o preço por litro');
-  if (!kma) throw new Error('Informe o km atual');
-  await api('abastecimento',{placa,modelo:vei?.modelo||'',origem_diesel:origem,litros,preco_litro:preco,km_atual:kma,km_anterior:kmb,motorista:mot,empresa:vei?.empresa||'Master',registrado_por:NOME,obs});
-  const kmP=kma>kmb?kma-kmb:0; const kml=kmP&&litros?(kmP/litros).toFixed(1):'—';
-  toast(`✓ Abastecimento registrado\n${placa} · ${litros}L · ${kmP}km · ${kml}km/L`,'ok');
-  voltarForm();
-}
-
-async function submitEntradaTanque() {
-  const litros = parseFloat(document.getElementById('lit-et')?.value)||0;
-  const preco  = parseFloat(document.getElementById('preco-et')?.value)||0;
-  const forn   = document.getElementById('forn-et')?.value.trim();
-  const obs    = document.getElementById('obs-et')?.value;
-  if (!litros) throw new Error('Informe os litros');
-  if (!preco)  throw new Error('Informe o preço por litro');
-  if (!forn)   throw new Error('Informe o fornecedor');
-  await api('entrada_tanque',{litros,preco_litro:preco,fornecedor:forn,empresa:'Master',registrado_por:NOME,obs});
-  toast(`✓ ${litros}L no tanque · R$ ${(litros*preco).toFixed(2).replace('.',',')}`, 'ok');
-  voltarForm();
-  if (PAPEL==='operacional') carregarSaldoTanque();
-}
-
-async function submitAjusteEstoque() {
-  const empresa  = document.getElementById('emp-aj')?.value;
-  const sku      = document.getElementById('sku-aj')?._sku || document.getElementById('sku-aj')?.value.trim();
-  const positivo = document.getElementById('tipo-aj')?.value==='true';
-  const qtd      = parseFloat(document.getElementById('qtd-aj')?.value)||0;
-  const motivo   = document.getElementById('obs-aj')?.value.trim();
-  if (!sku) throw new Error('Informe o produto');
-  if (!qtd) throw new Error('Informe a quantidade');
-  if (!motivo) throw new Error('Informe o motivo');
-  await api('ajuste_estoque',{sku,qtd,positivo,empresa,motivo,registrado_por:NOME});
-  toast('✓ Ajuste registrado — aguarda validação','ok');
-  voltarForm();
-}
 
 async function submitSaldoInicial() {
   const tipo    = document.getElementById('tipo-si')?.value;
