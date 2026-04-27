@@ -165,62 +165,46 @@ const API = 'https://script.google.com/macros/s/AKfycbxholHSDhAuzenkGyrBAukgqdNa
 
 // Cache de dados da planilha
 let CLIENTES = [];
-let PRODUTOS = [];
-let VEICULOS = [];
+let PRODUTOS  = [];
+let VEICULOS  = [];
 let PAPEL = '';
-let NOME = '';
+let NOME  = '';
 let _formSubmit = null;
 let _itemN = 0;
+let _dadosPromise = null; // aguardado antes de abrir qualquer form
 
-// Carregar dados ao iniciar
-async function carregarDados() {
-  try {
-    // 1. Buscamos Clientes, Produtos e a Frota (veículos) simultaneamente para ganhar performance
-    const [resClientes, resProdutos, resFrota] = await Promise.all([
-      fetch(API + '?endpoint=clientes').then(r => r.json()),
-      fetch(API + '?endpoint=produtos').then(r => r.json()),
-      fetch(API + '?endpoint=frota').then(r => r.json())
-    ]);
-
-    // 2. Processamento de Clientes
-    CLIENTES = (resClientes.dados || []).map(x => ({
-      id: x.id, 
-      nome: x.nome_canonico, 
-      tipo: x.tipo || ''
-    }));
-
-    // 3. Processamento de Produtos
-    PRODUTOS = (resProdutos.dados || []).map(x => ({
-      sku: x.sku, 
-      nome: x.nome_canonico, 
-      cat: x.categoria, 
-      ret: x.retornavel, 
-      tipo_ret: x.tipo_retorno, 
-      litros: x.litros_barril
-    }));
-
-    // 4. Processamento de Veículos (Substituímos 'rv' por 'resFrota' para evitar conflitos)
-    VEICULOS = (resFrota.dados || [])
-      .filter(v => String(v.ativo || 'Sim').toLowerCase() !== 'não')
-      .map(v => ({
-        placa: String(v.placa || '').toUpperCase(),
-        modelo: v.modelo || '',
-        empresa: v.empresa || 'Master',
-        motorista: v.motorista_fixo || '',
-      }));
-
-    console.log('Dados carregados com sucesso!');
-  } catch (e) { 
-    console.error('Erro carregando dados:', e); 
-  }
+// Carregar dados ao iniciar — retorna Promise para aguardar
+function carregarDados() {
+  _dadosPromise = (async () => {
+    document.getElementById('loading-ind').style.display='block';
+    try {
+      const [rc, rp, rf] = await Promise.all([
+        fetch(API+'?endpoint=clientes').then(r=>r.json()),
+        fetch(API+'?endpoint=produtos').then(r=>r.json()),
+        fetch(API+'?endpoint=frota').then(r=>r.json()),
+      ]);
+      CLIENTES = (rc.dados||[]).map(x=>({id:x.id, nome:x.nome_canonico, tipo:x.tipo||''}));
+      PRODUTOS  = (rp.dados||[]).map(x=>({sku:x.sku, nome:x.nome_canonico, cat:x.categoria, ret:x.retornavel, tipo_ret:x.tipo_retorno, litros:x.litros_barril}));
+      VEICULOS  = (rf.dados||[])
+        .filter(v=>String(v.ativo||'Sim').toLowerCase()!=='não')
+        .map(v=>({
+          placa:   String(v.placa||'').toUpperCase(),
+          modelo:  v.modelo||'',
+          empresa: v.empresa||'Master',
+          motorista: v.motorista_fixo||'',
+        }));
+    } catch(e) { console.warn('Erro carregando dados:', e); }
+    finally { document.getElementById('loading-ind').style.display='none'; }
+  })();
+  return _dadosPromise;
 }
-
 carregarDados();
 </script>
 
 <!-- TOPBAR -->
 <div class="topbar">
   <div class="logo">Harden <span class="logo-sub">Operações</span></div>
+  <div id="loading-ind" style="font-size:11px;opacity:.7;display:none">⌛ carregando...</div>
   <div id="role-chip" class="role-chip" style="display:none" onclick="voltarRoles()">
     <span id="role-chip-txt">—</span> <span style="opacity:.6">↩</span>
   </div>
@@ -436,6 +420,8 @@ function criarAC(inputEl, getOpcoes, onSelect, placeholder) {
     list._opts = opts;
     list._onSelect = onSelect;
     list._input = inputEl;
+    // Armazenar ref no input para reuso
+    inputEl._acList = list;
     list.classList.add('open');
   });
 
@@ -455,9 +441,12 @@ function criarAC(inputEl, getOpcoes, onSelect, placeholder) {
 
 function _acSelect(el) {
   const list = el.closest('.ac-list');
+  if (!list) return;
   const idx  = parseInt(el.dataset.idx);
-  const opt  = list._opts[idx];
+  const opt  = list._opts?.[idx];
+  if (!opt) return;
   const inp  = list._input;
+  if (!inp) return;
   inp.value  = opt.label;
   inp.classList.add('ac-selected');
   list.classList.remove('open');
@@ -465,9 +454,10 @@ function _acSelect(el) {
 }
 
 function opsCli(q, tipoFiltro) {
+  if (!CLIENTES.length) return [{label:'Carregando clientes...', meta:'', value:''}];
   return CLIENTES
     .filter(c => {
-      const nomeOk = c.nome.toLowerCase().includes(q);
+      const nomeOk = (c.nome||'').toLowerCase().includes(q);
       const tipoOk = !tipoFiltro || c.tipo === tipoFiltro;
       return nomeOk && tipoOk;
     })
@@ -476,8 +466,9 @@ function opsCli(q, tipoFiltro) {
 }
 
 function opsProd(q) {
+  if (!PRODUTOS.length) return [{label:'Carregando produtos...', meta:'', value:''}];
   return PRODUTOS
-    .filter(p => p.nome.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+    .filter(p => (p.nome||'').toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q))
     .slice(0,8)
     .map(p => ({label:p.sku+' — '+p.nome, meta:p.cat, value:p.sku, ...p}));
 }
@@ -516,8 +507,10 @@ function voltarRoles() {
   mostrarTela('roles');
 }
 
-function abrirForm(tipo) {
+async function abrirForm(tipo) {
   _telaAnterior = PAPEL;
+  // Aguardar dados da planilha antes de montar o formulário
+  if (_dadosPromise) await _dadosPromise;
   renderForm(tipo);
   mostrarTela('form');
 }
@@ -563,9 +556,7 @@ function formDefs(tipo) {
       <div class="fg"><label><span class="req">*</span> Cliente</label>
         <div><input id="cli-rm" type="text" autocomplete="off"></div>
       </div>
-      <div class="fg"><label>Operação</label>
-        ${selectEmpresa('emp-rm')}
-      </div>
+
       <div class="slabel">Itens coletados</div>
       <div class="items-wrap" id="itens-rm"></div>
       <button class="btn-add" onclick="addItem('itens-rm')">+ Adicionar produto</button>
@@ -595,7 +586,7 @@ function formDefs(tipo) {
       <div class="fg"><label><span class="req">*</span> Cliente</label>
         <div><input id="cli-rp" type="text" autocomplete="off"></div>
       </div>
-      <div class="fg"><label>Operação</label>${selectEmpresa('emp-rp')}</div>
+
       <div class="slabel">Itens recebidos</div>
       <div class="items-wrap" id="itens-rp"></div>
       <button class="btn-add" onclick="addItem('itens-rp')">+ Adicionar produto</button>
@@ -664,7 +655,6 @@ function formDefs(tipo) {
             <option value="Fábrica Campinas B">Fábrica Campinas B</option>
           </select>
         </div>
-      </div>
       <div class="slabel">Barris enviados (vazios)</div>
       <div class="items-wrap" id="itens-sf"></div>
       <button class="btn-add" onclick="addItem('itens-sf')">+ Adicionar SKU</button>
@@ -1004,7 +994,7 @@ async function handleSub() {
 async function submitRetornoMotorista() {
   const cliente = document.getElementById('cli-rm')?.value.trim();
   const cliId   = document.getElementById('cli-rm')?._id||'';
-  const empresa = document.getElementById('emp-rm')?.value;
+  const empresa = 'Master'; // definido pela operação, não pelo usuário
   const itens   = coletarItens('itens-rm');
   const obs     = document.getElementById('obs-rm')?.value;
   if (!cliente) throw new Error('Informe o cliente');
@@ -1019,7 +1009,7 @@ async function submitRetornoMotorista() {
 async function submitRetornoPatio() {
   const cliente = document.getElementById('cli-rp')?.value.trim();
   const cliId   = document.getElementById('cli-rp')?._id||'';
-  const empresa = document.getElementById('emp-rp')?.value;
+  const empresa = 'Master';
   const itens   = coletarItens('itens-rp');
   const obs     = document.getElementById('obs-rp')?.value;
   if (!cliente) throw new Error('Informe o cliente');
