@@ -165,35 +165,56 @@ const API = 'https://script.google.com/macros/s/AKfycbxholHSDhAuzenkGyrBAukgqdNa
 
 // Cache de dados da planilha
 let CLIENTES = [];
-let PRODUTOS  = [];
-let VEICULOS  = [];
+let PRODUTOS = [];
+let VEICULOS = [];
 let PAPEL = '';
-let NOME  = '';
+let NOME = '';
 let _formSubmit = null;
 let _itemN = 0;
 
 // Carregar dados ao iniciar
 async function carregarDados() {
   try {
-    const [rc, rp, rv] = await Promise.all([
-      fetch(API+'?endpoint=clientes').then(r=>r.json()),
-      fetch(API+'?endpoint=produtos').then(r=>r.json()),
-      fetch(API+'?endpoint=abastecimento&limit=1').then(r=>r.json()), // usado só para confirmar API ok
+    // 1. Buscamos Clientes, Produtos e a Frota (veículos) simultaneamente para ganhar performance
+    const [resClientes, resProdutos, resFrota] = await Promise.all([
+      fetch(API + '?endpoint=clientes').then(r => r.json()),
+      fetch(API + '?endpoint=produtos').then(r => r.json()),
+      fetch(API + '?endpoint=frota').then(r => r.json())
     ]);
-    CLIENTES = (rc.dados||[]).map(x=>({id:x.id, nome:x.nome_canonico, tipo:x.tipo||''}));
-    PRODUTOS  = (rp.dados||[]).map(x=>({sku:x.sku, nome:x.nome_canonico, cat:x.categoria, ret:x.retornavel, tipo_ret:x.tipo_retorno, litros:x.litros_barril}));
-    // Veículos: carregados da aba 🚗 Frota da planilha
-    const rv = await fetch(API+'?endpoint=frota').then(r=>r.json());
-    VEICULOS = (rv.dados||[])
-      .filter(v => String(v.ativo||'Sim').toLowerCase() !== 'não')
+
+    // 2. Processamento de Clientes
+    CLIENTES = (resClientes.dados || []).map(x => ({
+      id: x.id, 
+      nome: x.nome_canonico, 
+      tipo: x.tipo || ''
+    }));
+
+    // 3. Processamento de Produtos
+    PRODUTOS = (resProdutos.dados || []).map(x => ({
+      sku: x.sku, 
+      nome: x.nome_canonico, 
+      cat: x.categoria, 
+      ret: x.retornavel, 
+      tipo_ret: x.tipo_retorno, 
+      litros: x.litros_barril
+    }));
+
+    // 4. Processamento de Veículos (Substituímos 'rv' por 'resFrota' para evitar conflitos)
+    VEICULOS = (resFrota.dados || [])
+      .filter(v => String(v.ativo || 'Sim').toLowerCase() !== 'não')
       .map(v => ({
-        placa:   String(v.placa||'').toUpperCase(),
-        modelo:  v.modelo||'',
-        empresa: v.empresa||'Master',
-        motorista: v.motorista_fixo||'',
+        placa: String(v.placa || '').toUpperCase(),
+        modelo: v.modelo || '',
+        empresa: v.empresa || 'Master',
+        motorista: v.motorista_fixo || '',
       }));
-  } catch(e) { console.log('Erro carregando dados:', e); }
+
+    console.log('Dados carregados com sucesso!');
+  } catch (e) { 
+    console.error('Erro carregando dados:', e); 
+  }
 }
+
 carregarDados();
 </script>
 
