@@ -1221,7 +1221,7 @@ async function submitEntradaEstoque(isFab=false) {
       registrado_por: NOME,
       obs,
     });
-    toast('Chegada de ' + forn + ' registrada — aguarda validação', 'ok');
+    toast('Chegada de ' + forn + ' registrada com sucesso', 'ok');
   } else {
     // ENTRADA DE COMPRA → uma linha por item
     for (const it of itens) {
@@ -1287,24 +1287,35 @@ async function carregarPendencias(papel) {
       apiGet('retornaveis'),
       apiGet('estoque'),
     ]);
-    // Filtrar pendentes no cliente (evita problema de params na URL)
-    const retPend = (r1.dados||[]).filter(m => String(m.status||'').toLowerCase() === 'pendente');
-    const estPend = (r2.dados||[]).filter(m => String(m.status||'').toLowerCase() === 'pendente');
+    // Filtrar pendentes no cliente
+    const retTodos = (r1.dados||[]).filter(m => String(m.status||'').toLowerCase() === 'pendente');
+    const estTodos = (r2.dados||[]).filter(m => String(m.status||'').toLowerCase() === 'pendente');
     let pends = [];
 
     if (papel === 'patio') {
-      pends = retPend.filter(p => {
-        const val  = String(p.validador||'').toLowerCase().trim();
+      // PÁTIO vê APENAS retornos registrados por motoristas
+      pends = retTodos.filter(p => {
         const orig = String(p.origem_registro||'').toLowerCase().trim();
-        return val === 'patio' || orig === 'motorista' || (!val && !orig);
+        const val  = String(p.validador||'').toLowerCase().trim();
+        return orig === 'motorista' || val === 'patio';
       });
+
     } else if (papel === 'comercial') {
-      const retCom = retPend.filter(p => {
-        const val  = String(p.validador||'').toLowerCase().trim();
+      // COMERCIAL vê:
+      // 1. Retornáveis lançados pelo pátio (distribuidor devolveu no CD)
+      // 2. Entradas de estoque de compra (NF de fornecedor)
+      // NÃO inclui chegada de fábrica (já é validado direto)
+      const retComercial = retTodos.filter(p => {
         const orig = String(p.origem_registro||'').toLowerCase().trim();
-        return val === 'comercial' || orig === 'patio_distribuidor' || (!val && !orig);
+        const val  = String(p.validador||'').toLowerCase().trim();
+        return orig === 'patio_distribuidor' || val === 'comercial';
       });
-      pends = [...retCom, ...estPend];
+      // Estoque: apenas Entrada Compra (não Entrada Fábrica que já é validado)
+      const estComercial = estTodos.filter(m => {
+        const tipo = String(m.tipo_mov||'').toLowerCase();
+        return tipo.includes('entrada compra') || tipo === 'entrada compra';
+      });
+      pends = [...retComercial, ...estComercial];
     }
 
     if (!pends.length) {
@@ -1314,11 +1325,11 @@ async function carregarPendencias(papel) {
     el.innerHTML = '<div class="pend-list">' + pends.map(p => renderPend(p, papel)).join('') + '</div>';
   } catch(e) {
     console.error('Erro pendencias:', e);
-    const errMsg = '<div class="empty"><div class="empty-icon">!</div><div class="empty-txt">Erro - toque para atualizar</div></div>';
-    el.innerHTML = errMsg;
+    el.innerHTML = '<div class="empty"><div class="empty-icon">!</div><div class="empty-txt">Erro ao carregar</div></div>';
     el.onclick = function(){ carregarPendencias(papel); };
   }
 }
+
 
 function renderPend(p,papel) {
   const isRet = p.tipo_mov !== undefined && p.destino !== undefined;
