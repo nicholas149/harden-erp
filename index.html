@@ -1305,13 +1305,21 @@ async function carregarSaldoTanque() {
 // API
 // ──────────────────────────────────────────────────────────────
 async function api(acao,dados) {
-  const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao,dados})});
-  const j=await r.json();
-  if(!j.ok) throw new Error(j.erro||'Erro desconhecido');
+  // Usar text/plain para evitar preflight CORS (Apps Script não suporta OPTIONS)
+  const r = await fetch(API, {
+    method: 'POST',
+    headers: {'Content-Type': 'text/plain'},
+    body: JSON.stringify({acao, dados}),
+  });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.erro||'Erro desconhecido');
   return j;
 }
 async function apiGet(ep) {
-  const r=await fetch(`${API}?endpoint=${ep}`);
+  const r = await fetch(`${API}?endpoint=${ep}`, {
+    method: 'GET',
+    redirect: 'follow',
+  });
   return r.json();
 }
 
