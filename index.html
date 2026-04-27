@@ -165,9 +165,10 @@ textarea{resize:vertical;min-height:64px}
 const API = 'https://script.google.com/macros/s/AKfycbxholHSDhAuzenkGyrBAukgqdNaJXArt5YBL-pRRELOHDC2uOHu_5M59eIawYWYytb2/exec';
 
 // Cache de dados da planilha
-let CLIENTES = [];
-let PRODUTOS  = [];
-let VEICULOS  = [];
+let CLIENTES    = [];
+let PRODUTOS    = [];
+let VEICULOS    = [];
+let FORNECEDORES = []; // carregado da aba Fornecedores
 let PAPEL = '';
 let NOME  = '';
 let _formSubmit = null;
@@ -179,13 +180,19 @@ function carregarDados() {
   _dadosPromise = (async () => {
     const loadInd = document.getElementById('loading-ind'); if(loadInd) loadInd.style.display='block';
     try {
-      const [rc, rp, rf] = await Promise.allSettled([
+      const [rc, rp, rf, rforn] = await Promise.allSettled([
         fetch(API+'?endpoint=clientes').then(r=>r.json()),
         fetch(API+'?endpoint=produtos').then(r=>r.json()),
         fetch(API+'?endpoint=frota').then(r=>r.json()),
+        fetch(API+'?endpoint=fornecedores').then(r=>r.json()),
       ]).then(results => results.map(r => r.status==='fulfilled' ? r.value : {ok:false,dados:[]}));
       CLIENTES = (rc.dados||[]).map(x=>({id:x.id, nome:x.nome_canonico, tipo:x.tipo||''}));
       PRODUTOS  = (rp.dados||[]).map(x=>({sku:x.sku, nome:x.nome_canonico, cat:x.categoria, ret:x.retornavel, tipo_ret:x.tipo_retorno, litros:x.litros_barril}));
+      // Fornecedores
+      FORNECEDORES = (rforn.dados||[])
+        .filter(f => String(f.ativo||'Sim').toLowerCase() !== 'nao')
+        .map(f => ({id:f.id||'', nome:f.nome||f.nome_fornecedor||'', tipo:f.tipo||''}));
+
       // Carregar veículos — com fallback se endpoint ainda não estiver publicado
       if (rf.ok && rf.dados?.length) {
         VEICULOS = rf.dados
@@ -515,6 +522,19 @@ function opsProd(q) {
     .map(p => ({label:p.sku+' - '+p.nome, meta:p.cat, value:p.sku, ...p}));
 }
 
+function opsForn(q) {
+  if (!FORNECEDORES.length) {
+    // Fallback: fornecedores padrão enquanto aba não existe
+    const padrao = ['Fábrica Leme','Fábrica Campinas A','Fábrica Campinas B'];
+    return padrao.filter(n => !q || n.toLowerCase().includes(q))
+      .map(n => ({label:n, value:n, meta:'fábrica'}));
+  }
+  return FORNECEDORES
+    .filter(f => !q || (f.nome||'').toLowerCase().includes(q))
+    .slice(0,8)
+    .map(f => ({label:f.nome, value:f.nome, meta:f.tipo}));
+}
+
 // Opções de barril pelo TAMANHO — para retorno de vasilhame
 // O vasilhame é o barril, independente do produto que estava dentro
 const BARRIS_PADRAO = [
@@ -724,13 +744,10 @@ function formDefs(tipo) {
           <textarea id="obs-ee" placeholder="Divergências, avarias, observações..."></textarea>
         </div>`,
       init: () => {
-        if (isFab) {
-          criarAC(document.getElementById('forn-ee'), q => [
-            {label:'Fábrica Leme',meta:'SP',value:'Fábrica Leme'},
-            {label:'Fábrica Campinas A',meta:'SP',value:'Fábrica Campinas A'},
-            {label:'Fábrica Campinas B',meta:'SP',value:'Fábrica Campinas B'},
-          ].filter(x=>x.label.toLowerCase().includes(q)), opt => {});
-        }
+        // Autocomplete de fornecedor (da aba Fornecedores)
+        criarAC(document.getElementById('forn-ee'), q => opsForn(q), opt => {
+          document.getElementById('forn-ee')._fornNome = opt.value;
+        });
         addItem('itens-ee', true);
       },
       submit: () => submitEntradaEstoque(isFab),
@@ -809,19 +826,52 @@ function formDefs(tipo) {
       }
       document.getElementById('mot-ab').value = NOME;
       updatePrecoCampo();
-      // Buscar km anterior ao selecionar veículo
+      // Ao selecionar veículo: buscar km anterior e custo médio do tanque
       sel?.addEventListener('change', async () => {
         const placa = sel.value;
         if (!placa) return;
         try {
+          // Km anterior do veículo
           const r = await apiGet('abastecimento?placa='+encodeURIComponent(placa));
           const movs = (r.dados||[]).filter(m=>m.km_atual>0).sort((a,b)=>b.km_atual-a.km_atual);
           const kmAnt = document.getElementById('kmb-ab');
           if (kmAnt && movs.length) {
             kmAnt.value = movs[0].km_atual;
-            calcAbast();
           }
         } catch(e){}
+        try {
+          // Custo médio do tanque (auto-preenche se origem=tanque)
+          const orig = document.getElementById('orig-ab')?.value;
+          if (orig === 'tanque') {
+            const rt = await apiGet('tanque_saldo');
+            const preco = document.getElementById('preco-ab');
+            if (preco && rt.dados?.custo_medio_litro > 0) {
+              preco.value = rt.dados.custo_medio_litro.toFixed(2);
+              preco.style.background = 'var(--g2)';
+              preco.title = 'Custo médio do tanque';
+            }
+          }
+        } catch(e){}
+        calcAbast();
+      });
+
+      // Ao mudar origem, atualizar preço automaticamente
+      document.getElementById('orig-ab')?.addEventListener('change', async (ev) => {
+        updatePrecoCampo();
+        if (ev.target.value === 'tanque') {
+          try {
+            const rt = await apiGet('tanque_saldo');
+            const preco = document.getElementById('preco-ab');
+            if (preco && rt.dados?.custo_medio_litro > 0) {
+              preco.value = rt.dados.custo_medio_litro.toFixed(2);
+              preco.style.background = 'var(--g2)';
+              preco.title = 'Custo médio do tanque (automático)';
+            }
+          } catch(e){}
+        } else {
+          const preco = document.getElementById('preco-ab');
+          if (preco) { preco.style.background = ''; preco.title = ''; }
+        }
       });
     },
     submit: submitAbastecimento,
