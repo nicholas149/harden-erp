@@ -7,6 +7,15 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Harden — Operações</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --g:#0F6E56;--g1:#0a5240;--g2:#E1F5EE;--g3:#A7F3D0;
   --a:#D97706;--a2:#FEF3C7;--a3:#FDE68A;
@@ -176,7 +185,7 @@ let _dadosPromise = null; // aguardado antes de abrir qualquer form
 // Carregar dados ao iniciar — retorna Promise para aguardar
 function carregarDados() {
   _dadosPromise = (async () => {
-    document.getElementById('loading-ind').style.display='block';
+    const loadInd = document.getElementById('loading-ind'); if(loadInd) loadInd.style.display='block';
     try {
       const [rc, rp, rf] = await Promise.allSettled([
         fetch(API+'?endpoint=clientes').then(r=>r.json()),
@@ -209,11 +218,16 @@ function carregarDados() {
         console.warn('Endpoint frota não disponível — usando lista padrão. Publique nova versão do Apps Script.');
       }
     } catch(e) { console.warn('Erro carregando dados:', e); }
-    finally { document.getElementById('loading-ind').style.display='none'; }
+    finally { const li=document.getElementById('loading-ind'); if(li) li.style.display='none'; }
   })();
   return _dadosPromise;
 }
-carregarDados();
+// Aguardar DOM estar pronto antes de carregar
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', carregarDados);
+} else {
+  carregarDados();
+}
 </script>
 
 <!-- TOPBAR -->
@@ -524,8 +538,9 @@ function voltarRoles() {
 
 async function abrirForm(tipo) {
   _telaAnterior = PAPEL;
-  // Aguardar dados da planilha antes de montar o formulário
-  if (_dadosPromise) await _dadosPromise;
+  // Garantir que dados estejam carregados antes de montar o formulário
+  if (!_dadosPromise) carregarDados();
+  try { await _dadosPromise; } catch(e) { console.warn('Dados parciais:', e); }
   renderForm(tipo);
   mostrarTela('form');
 }
@@ -538,7 +553,9 @@ function voltarForm() { mostrarTela(_telaAnterior); }
 function renderForm(tipo) {
   const hdr = document.getElementById('form-header');
   const bdy = document.getElementById('form-body');
+  if (!hdr || !bdy) { console.error('Elementos form-header/form-body não encontrados'); return; }
   const defs = formDefs(tipo);
+  if (!defs || !defs.html) { console.error('formDefs retornou undefined para tipo:', tipo); return; }
   hdr.innerHTML = `
     <div class="btn-back" onclick="voltarForm()">‹</div>
     <div class="fh-info">
