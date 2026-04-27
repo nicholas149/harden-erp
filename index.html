@@ -512,7 +512,7 @@ function opsProd(q) {
   return PRODUTOS
     .filter(p => (p.nome||'').toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q))
     .slice(0,8)
-    .map(p => ({label:p.sku+' — '+p.nome, meta:p.cat, value:p.sku, ...p}));
+    .map(p => ({label:p.sku+' - '+p.nome, meta:p.cat, value:p.sku, ...p}));
 }
 
 // Opções de barril pelo TAMANHO — para retorno de vasilhame
@@ -526,7 +526,7 @@ const BARRIS_PADRAO = [
 ];
 
 function opsBarril(q) {
-  // Buscar barris padrão + equipamentos retornáveis
+  // Buscar barris padrao + equipamentos retornaveis
   const barris = BARRIS_PADRAO.filter(b =>
     !q || b.label.toLowerCase().includes(q)
   ).map(b => ({...b, meta:'barril'}));
@@ -536,7 +536,7 @@ function opsBarril(q) {
     .filter(p => p.ret==='Sim' && p.tipo_ret !== 'barril' &&
       ((p.nome||'').toLowerCase().includes(q) || !q))
     .slice(0,4)
-    .map(p => ({label:p.sku+' — '+p.nome, value:p.sku, nome:p.nome, meta:p.tipo_ret||'equip'}));
+    .map(p => ({label:p.sku+' - '+p.nome, value:p.sku, nome:p.nome, meta:p.tipo_ret||'equip'}));
 
   return [...barris, ...equip].slice(0,8);
 }
@@ -789,8 +789,8 @@ function formDefs(tipo) {
         <div class="fg"><label><span class="req">*</span> Km atual</label>
           <input type="number" id="kma-ab" placeholder="Ex: 45.350" min="0" oninput="calcAbast()">
         </div>
-        <div class="fg"><label>Km anterior (automático)</label>
-          <input type="number" id="kmb-ab" placeholder="Preenche sozinho" min="0" oninput="calcAbast()" readonly style="background:var(--g2);color:var(--g)">
+        <div class="fg"><label>Km anterior (auto)</label>
+          <input type="number" id="kmb-ab" placeholder="Preenche automaticamente" min="0" oninput="calcAbast()" readonly style="background:var(--g2);color:var(--g)">
         </div>
       </div>
       <div id="calc-ab-box" class="calc-box" style="display:none"></div>
@@ -866,7 +866,7 @@ function formDefs(tipo) {
         <div class="fg"><label><span class="req">*</span> Tipo</label>
           <select id="tipo-aj">
             <option value="true">+ Acréscimo</option>
-            <option value="false">− Redução</option>
+            <option value="false">- Redução</option>
           </select>
         </div>
         <div class="fg"><label><span class="req">*</span> Quantidade</label>
@@ -1282,17 +1282,17 @@ async function carregarPendencias(papel) {
       pends = retPend.filter(p => {
         const val  = String(p.validador||'').toLowerCase();
         const orig = String(p.origem_registro||'').toLowerCase();
-        // Vai para pátio se: validador=patio, OU origem=motorista
-        // OU sem validador E sem origem (legado — mostra para pátio como primeiro filtro)
+        // Vai para patio se: validador=patio, OU origem=motorista
+        // OU sem validador E sem origem (legado - mostra para patio como primeiro filtro)
         if (val === 'patio') return true;
         if (orig === 'motorista') return true;
-        if (!val && !orig) return true; // legado: mostra tudo no pátio primeiro
+        if (!val && !orig) return true; // legado: mostra tudo no patio primeiro
         return false;
       });
 
     } else if (papel === 'comercial') {
       // COMERCIAL valida:
-      // 1. Retornáveis registrados pelo pátio (distribuidor/PDV chegou no CD)
+      // 1. Retornaveis registrados pelo patio (distribuidor/PDV chegou no CD)
       // 2. Entradas de estoque com NF (toda entrada de compra)
       const retComercial = retPend.filter(p => {
         const val  = String(p.validador||'').toLowerCase();
@@ -1309,7 +1309,7 @@ async function carregarPendencias(papel) {
     el.innerHTML = '<div class="pend-list">' + pends.map(p => renderPend(p, papel)).join('') + '</div>';
 
   } catch(e) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-txt" onclick="carregarPendencias(''+papel+'')">Erro — toque para tentar novamente</div></div>';
+    el.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-txt" onclick="carregarPendencias('${papel}')">Erro — toque para tentar novamente</div></div>`;
   }
 }
 
@@ -1326,7 +1326,7 @@ function renderPend(p,papel) {
 
   const quem     = p.destino||p.fornecedor||p.cliente||'—';
   const prodNome = p.produto || p.sku || '';
-  const item     = prodNome + (p.qtd ? ' × ' + p.qtd : '');
+  const item     = prodNome + (p.qtd ? ' x ' + p.qtd : '');
   const por      = p.registrado_por ? 'por ' + p.registrado_por : '';
   const data     = p.data || '';
   const aba      = isRet ? 'retornaveis' : 'estoque';
