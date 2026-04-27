@@ -322,7 +322,10 @@ if (document.readyState === 'loading') {
 <div class="screen" id="sc-patio">
   <div class="main">
     <div class="content">
-      <div class="slabel">⏳ Aguardando validação do pátio</div>
+      <div class="slabel" style="display:flex;align-items:center;justify-content:space-between">
+        <span>⏳ Aguardando sua validação</span>
+        <span onclick="carregarPendencias('patio')" style="font-size:11px;color:var(--g);cursor:pointer;font-weight:500">↻ Atualizar</span>
+      </div>
       <div id="pend-patio"></div>
       <div class="slabel">Novos lançamentos</div>
       <div class="acard" onclick="abrirForm('retorno-patio')">
@@ -367,7 +370,10 @@ if (document.readyState === 'loading') {
 <div class="screen" id="sc-comercial">
   <div class="main">
     <div class="content">
-      <div class="slabel">⏳ Aguardando validação do comercial</div>
+      <div class="slabel" style="display:flex;align-items:center;justify-content:space-between">
+        <span>⏳ Aguardando sua validação</span>
+        <span onclick="carregarPendencias('comercial')" style="font-size:11px;color:var(--g);cursor:pointer;font-weight:500">↻ Atualizar</span>
+      </div>
       <div id="pend-comercial"></div>
     </div>
   </div>
@@ -1246,35 +1252,54 @@ async function carregarPendencias(papel) {
   if (!el) return;
   el.innerHTML = '<div class="empty"><div class="empty-icon">⌛</div><div class="empty-txt">Carregando...</div></div>';
   try {
-    const [r1,r2] = await Promise.all([
+    const [r1, r2] = await Promise.all([
       apiGet('retornaveis?status=pendente'),
       apiGet('estoque?status=pendente'),
     ]);
+
     let pends = [];
-    if (papel==='patio') {
-      pends = (r1.dados||[]).filter(p=>p.origem_registro==='motorista'||String(p.registrado_por||'').toLowerCase().includes('motor'));
-    } else {
-      const rd = (r1.dados||[]).filter(p=>p.origem_registro==='patio_distribuidor');
-      pends = [...rd,...(r2.dados||[])];
+
+    if (papel === 'patio') {
+      // Pátio valida: retornáveis com validador=patio OU origem=motorista OU sem validador (legado)
+      pends = (r1.dados||[]).filter(p => {
+        const val = String(p.validador||'').toLowerCase();
+        const orig = String(p.origem_registro||'').toLowerCase();
+        return val === 'patio' || orig === 'motorista' || (!val && !orig);
+      });
+
+    } else if (papel === 'comercial') {
+      // Comercial valida: retornáveis com validador=comercial OU origem=patio_distribuidor
+      // E entradas de estoque pendentes
+      const retPend = (r1.dados||[]).filter(p => {
+        const val  = String(p.validador||'').toLowerCase();
+        const orig = String(p.origem_registro||'').toLowerCase();
+        return val === 'comercial' || orig === 'patio_distribuidor';
+      });
+      const estPend = (r2.dados||[]);
+      pends = [...retPend, ...estPend];
     }
+
     if (!pends.length) {
-      el.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-txt">Sem pendências</div></div>';
+      el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div class="empty-txt">Sem pendências no momento</div></div>';
       return;
     }
-    el.innerHTML='<div class="pend-list">'+pends.map(p=>renderPend(p,papel)).join('')+'</div>';
+    el.innerHTML = '<div class="pend-list">' + pends.map(p => renderPend(p, papel)).join('') + '</div>';
+
   } catch(e) {
-    el.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-txt" onclick="carregarPendencias(\''+papel+'\')">Erro — toque para tentar novamente</div></div>';
+    el.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-txt" onclick="carregarPendencias(''+papel+'')">Erro — toque para tentar novamente</div></div>';
   }
 }
 
 function renderPend(p,papel) {
-  const isRet = p.destino!==undefined;
+  const isRet = p.tipo_mov !== undefined && p.destino !== undefined;
   const tag   = isRet?'tag-ret':'tag-est';
-  const label = isRet?'Retorno vasilhame':'Entrada estoque';
+  const label = isRet ? 'Retorno vasilhame' : 'Entrada estoque';
   const quem  = p.destino||p.fornecedor||p.cliente||'—';
-  const item  = (p.sku||'')+(p.qtd?' × '+p.qtd:'');
-  const por   = p.registrado_por?`por ${p.registrado_por}`:'';
-  const aba   = isRet?'retornaveis':'estoque';
+  const prodNome = p.produto || p.sku || '';
+  const item  = prodNome + (p.qtd ? ' × ' + p.qtd : '');
+  const por   = p.registrado_por ? 'por ' + p.registrado_por : '';
+  const data  = p.data ? p.data : '';
+  const aba   = isRet ? 'retornaveis' : 'estoque';
   return `<div class="pend-card" id="pc-${p.id}">
     <div class="pend-head">
       <div><div class="pend-tag ${tag}">${label}</div><div class="pend-cliente">${quem}</div></div>
@@ -1282,7 +1307,7 @@ function renderPend(p,papel) {
     </div>
     <div class="pend-body">
       <div class="pend-itens">${item}</div>
-      <div class="pend-meta">${por}</div>
+      <div class="pend-meta">${por}${data?' · '+data:''}</div>
       <div class="pend-btns">
         <button class="pbtn pbtn-ok" onclick="valPend('${p.id}','${aba}','validado','${papel}')">✓ Confirmar</button>
         <button class="pbtn pbtn-edit" onclick="editPend('${p.id}','${aba}','${papel}')">✏ Corrigir</button>
