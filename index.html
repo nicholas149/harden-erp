@@ -380,6 +380,14 @@ if (document.readyState === 'loading') {
           </div>
           <div class="acard-right">›</div>
         </div>
+        <div class="acard" onclick="abrirForm('devolucao')">
+          <div class="acard-icon ic-red">↩️</div>
+          <div class="acard-body">
+            <div class="acard-title">Devolução de cliente</div>
+            <div class="acard-sub">Produto não vendido voltou do cliente</div>
+          </div>
+          <div class="acard-right">›</div>
+        </div>
       </div>
 
       <!-- PAINEL: Validar -->
@@ -1009,6 +1017,38 @@ function formDefs(tipo) {
   };
 
   // ── OCORRÊNCIA ─────────────────────────────────────────
+  case 'devolucao': return {
+    titulo:'Devolucao de Cliente', sub:'Patio — produto retornado',
+    botao:'Registrar — enviar para comercial',
+    html:`
+      <div class="warn-box">⚠️ Aguarda validacao do <strong>Comercial</strong>. O estoque e liberado apos aprovacao.</div>
+      <div class="fg">
+        <label><span class="req">*</span> Tipo de cliente</label>
+        ${segmentedTipo('tipo-cli-dev')}
+      </div>
+      <div class="fg"><label><span class="req">*</span> Cliente</label>
+        <div><input id="cli-dev" type="text" autocomplete="off" placeholder="Buscar cliente..."></div>
+      </div>
+      <div class="fg"><label>Referencia da venda original (opcional)</label>
+        <input id="ref-dev" type="text" placeholder="Ex: pedido 4521 / data 27/04">
+      </div>
+      <div class="slabel">Produtos devolvidos</div>
+      <div class="items-wrap" id="itens-dev"></div>
+      <button class="btn-add" onclick="addItem('itens-dev')">+ Adicionar produto</button>
+      <div class="fg" style="margin-top:8px"><label>Observacao / motivo</label>
+        <textarea id="obs-dev" placeholder="Ex: festa encerrada antes do previsto, produto em bom estado..."></textarea>
+      </div>`,
+    init: () => {
+      initSeg('tipo-cli-dev');
+      criarAC(document.getElementById('cli-dev'), q => opsCli(q), opt => {
+        document.getElementById('cli-dev')._id  = opt.value;
+        document.getElementById('cli-dev')._tipo = opt.tipo;
+      });
+      addItem('itens-dev');
+    },
+    submit: submitDevolucao,
+  };
+
   case 'ocorrencia': return {
     titulo:'Ocorrência de Entrega', sub:'Registrada na aba Retornáveis (obs)',
     botao:'Registrar ocorrência',
@@ -1294,6 +1334,31 @@ async function submitSaldoInicial() {
   voltarForm();
 }
 
+async function submitDevolucao() {
+  const cliente  = document.getElementById('cli-dev')?.value.trim();
+  const cliId    = document.getElementById('cli-dev')?._id || '';
+  const vendaRef = document.getElementById('ref-dev')?.value.trim();
+  const itens    = coletarItens('itens-dev');
+  const obs      = document.getElementById('obs-dev')?.value || '';
+
+  if (!cliente)      throw new Error('Informe o cliente');
+  if (!itens.length) throw new Error('Adicione ao menos um produto');
+
+  const r = await api('devolucao', {
+    cliente,
+    cliente_id: cliId,
+    empresa: 'Master',
+    itens: itens.map(it => ({sku: it.sku, qtd: it.qtd})),
+    venda_ref: vendaRef,
+    registrado_por: NOME,
+    obs,
+  });
+
+  const total = itens.reduce((s, it) => s + (it.qtd||0), 0);
+  toast('Devolucao registrada: ' + total + ' un de ' + cliente + ' — aguarda comercial', 'ok');
+  voltarForm();
+}
+
 async function submitOcorrencia() {
   const cliente = document.getElementById('cli-oc')?.value.trim();
   const tipo    = document.getElementById('tipo-oc')?.value;
@@ -1443,18 +1508,16 @@ async function valPend(id, aba, status, papel, ref) {
   const card = document.getElementById('pc-'+id);
   if (card) { card.style.opacity = '.4'; card.style.pointerEvents = 'none'; }
   try {
-    await api('validar_pendencia', {id, aba, status, validado_por: NOME});
-    // Sincronizar par na outra aba pelo ref (mesmo lançamento, abas diferentes)
-    if (ref) {
-      try { await api('validar_por_ref', {ref, aba_origem: aba, status, validado_por: NOME}); }
-      catch(e) { /* par nao encontrado — ok */ }
-    }
+    // validarPendencia no script propaga automaticamente via op_id
+    // para todas as abas com o mesmo lançamento
+    const r = await api('validar_pendencia', {id, aba, status, validado_por: NOME});
     card?.remove();
-    toast(status === 'validado' ? '&#10003; Confirmado' : 'Rejeitado', 'ok');
-    const cont = document.getElementById('pend-'+papel);
-    if (cont && !cont.querySelector('.pend-card')) {
-      cont.innerHTML = '<div class="empty"><div class="empty-icon">&#10003;</div><div class="empty-txt">Sem pendencias</div></div>';
-    }
+    // Remover também cards de outros registros com mesmo op_id que foram sincronizados
+    // (recarregar a lista é mais simples e garante consistência)
+    setTimeout(() => carregarPendencias(papel), 500);
+    const msg = status === 'validado' ? '&#10003; Confirmado' : 'Rejeitado';
+    const sinc = r?.dados?.sincronizados;
+    toast(msg + (sinc > 0 ? ' + ' + sinc + ' sincronizado(s)' : ''), 'ok');
   } catch(e) {
     if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
     toast('Erro: ' + e.message, 'err');
