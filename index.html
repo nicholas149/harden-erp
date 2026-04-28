@@ -1313,6 +1313,74 @@ async function submitEntradaEstoque(isFab=false) {
   voltarForm();
 }
 
+async function submitAbastecimento() {
+  const placa   = document.getElementById('vei-ab')?.value;
+  const origem  = document.getElementById('orig-ab')?.value;
+  const litros  = parseFloat(document.getElementById('lit-ab')?.value)||0;
+  const preco   = parseFloat(document.getElementById('preco-ab')?.value)||0;
+  const kma     = parseFloat(document.getElementById('kma-ab')?.value)||0;
+  const kmb     = parseFloat(document.getElementById('kmb-ab')?.value)||0;
+  const mot     = document.getElementById('mot-ab')?.value || NOME;
+  const obs     = document.getElementById('obs-ab')?.value || '';
+  const veiData = VEICULOS.find(v => v.placa === placa) || {};
+ 
+  if (!placa)  throw new Error('Selecione o veiculo');
+  if (!litros) throw new Error('Informe os litros abastecidos');
+  if (origem === 'posto' && !preco) throw new Error('Informe o preco por litro');
+  if (!kma)    throw new Error('Informe o km atual');
+ 
+  const kmP = kma > kmb ? kma - kmb : 0;
+  const kml = kmP > 0 && litros > 0 ? (kmP / litros).toFixed(1) : '—';
+ 
+  await api('abastecimento', {
+    placa, modelo: veiData.modelo || '',
+    origem_diesel: origem, litros,
+    preco_litro: preco || 0,
+    km_atual: kma, km_anterior: kmb,
+    motorista: mot,
+    empresa: veiData.empresa || 'Master',
+    registrado_por: NOME, obs,
+  });
+  toast(placa + ' — ' + litros + 'L' + (kmP ? ' · ' + kmP + 'km · ' + kml + 'km/L' : ''), 'ok');
+  voltarForm();
+}
+ 
+async function submitEntradaTanque() {
+  const litros = parseFloat(document.getElementById('lit-et')?.value)||0;
+  const preco  = parseFloat(document.getElementById('preco-et')?.value)||0;
+  const forn   = document.getElementById('forn-et')?.value.trim();
+  const obs    = document.getElementById('obs-et')?.value || '';
+ 
+  if (!litros) throw new Error('Informe os litros');
+  if (!preco)  throw new Error('Informe o preco por litro');
+  if (!forn)   throw new Error('Informe o fornecedor');
+ 
+  await api('entrada_tanque', {
+    litros, preco_litro: preco,
+    fornecedor: forn, empresa: 'Master',
+    registrado_por: NOME, obs,
+  });
+  const total = (litros * preco).toFixed(2).replace('.', ',');
+  toast(litros + 'L no tanque — R$ ' + total, 'ok');
+  voltarForm();
+  if (PAPEL === 'operacional') carregarSaldoTanque();
+}
+ 
+async function submitAjusteEstoque() {
+  const empresa  = document.getElementById('emp-aj')?.value || 'Master';
+  const sku      = document.getElementById('sku-aj')?._sku || document.getElementById('sku-aj')?.value.trim();
+  const positivo = document.getElementById('tipo-aj')?.value === 'true';
+  const qtd      = parseFloat(document.getElementById('qtd-aj')?.value)||0;
+  const motivo   = document.getElementById('obs-aj')?.value.trim();
+ 
+  if (!sku)    throw new Error('Informe o produto');
+  if (!qtd)    throw new Error('Informe a quantidade');
+  if (!motivo) throw new Error('Informe o motivo do ajuste');
+ 
+  await api('ajuste_estoque', {sku, qtd, positivo, empresa, motivo, registrado_por: NOME});
+  toast('Ajuste registrado — aguarda validacao operacional', 'ok');
+  voltarForm();
+}
 
 async function submitSaldoInicial() {
   const tipo    = document.getElementById('tipo-si')?.value;
