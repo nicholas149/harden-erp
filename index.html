@@ -83,6 +83,7 @@ body{min-height:100dvh;display:flex;flex-direction:column}
 input,select,textarea{width:100%;border:1.5px solid var(--bd);border-radius:var(--rad3);padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:15px;color:var(--ink);background:var(--bg);outline:none;transition:border-color .15s;-webkit-appearance:none}
 input:focus,select:focus,textarea:focus{border-color:var(--g);background:#fff}
 textarea{resize:vertical;min-height:64px}
+.row1{display:grid;grid-template-columns:1fr;gap:10px}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 
@@ -799,7 +800,7 @@ function formDefs(tipo) {
     titulo:'Envio para Fábrica', sub:'Barris vazios saindo',
     botao:'Confirmar envio',
     html:`
-      <div class="row2">
+      <div class="row1">
         <div class="fg"><label>Operação</label>${selectEmpresa('emp-sf')}</div>
         <div class="fg"><label><span class="req">*</span> Fábrica</label>
           <select id="fab-sf">
