@@ -819,7 +819,7 @@ function formDefs(tipo) {
     submit: submitSaidaFabrica,
   };
 
-  // ── ABASTECIMENTO ──────────────────────────────────────
+// ── ABASTECIMENTO ──────────────────────────────────────
   case 'abastecimento': return {
     titulo:'Abastecimento', sub:'Selecione o veículo da frota',
     botao:'Registrar abastecimento',
@@ -895,7 +895,7 @@ function formDefs(tipo) {
         } catch(e){}
         calcAbast();
       });
-
+ 
       // Ao mudar origem, atualizar preço automaticamente
       document.getElementById('orig-ab')?.addEventListener('change', async (ev) => {
         updatePrecoCampo();
