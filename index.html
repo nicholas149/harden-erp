@@ -1301,20 +1301,24 @@ async function carregarPendencias(papel) {
       });
 
     } else if (papel === 'comercial') {
-      // COMERCIAL vê:
-      // 1. Retornáveis lançados pelo pátio (distribuidor devolveu no CD)
-      // 2. Entradas de estoque de compra (NF de fornecedor)
-      // NÃO inclui chegada de fábrica (já é validado direto)
+      // COMERCIAL ve:
+      // 1. Retornaveis de clientes lancados pelo patio (distribuidor devolveu)
+      // 2. Entradas de estoque pendentes — mostra o PRODUTO (ex: Harden Pilsen 50L)
+      //    Barris puros (BARRIL-XXL) sao omitidos pois sao consequencia do produto
+
       const retComercial = retTodos.filter(p => {
         const orig = String(p.origem_registro||'').toLowerCase().trim();
         const val  = String(p.validador||'').toLowerCase().trim();
         return orig === 'patio_distribuidor' || val === 'comercial';
       });
-      // Estoque: apenas Entrada Compra (não Entrada Fábrica que já é validado)
+
       const estComercial = estTodos.filter(m => {
-        const tipo = String(m.tipo_mov||'').toLowerCase();
-        return tipo.includes('entrada compra') || tipo === 'entrada compra';
+        const sku = String(m.sku||'').toUpperCase();
+        // Omitir barris puros — o produto correspondente ja aparece no estoque
+        if (sku.indexOf('BARRIL-') === 0) return false;
+        return true;
       });
+
       pends = [...retComercial, ...estComercial];
     }
 
@@ -1322,7 +1326,11 @@ async function carregarPendencias(papel) {
       el.innerHTML = '<div class="empty"><div class="empty-icon">&#10003;</div><div class="empty-txt">Sem pendencias no momento</div></div>';
       return;
     }
-    el.innerHTML = '<div class="pend-list">' + pends.map(p => renderPend(p, papel)).join('') + '</div>';
+    const lista = document.createElement('div');
+    lista.className = 'pend-list';
+    pends.forEach(p => lista.appendChild(renderPend(p, papel)));
+    el.innerHTML = '';
+    el.appendChild(lista);
   } catch(e) {
     console.error('Erro pendencias:', e);
     el.innerHTML = '<div class="empty"><div class="empty-icon">!</div><div class="empty-txt">Erro ao carregar</div></div>';
@@ -1331,51 +1339,80 @@ async function carregarPendencias(papel) {
 }
 
 
-function renderPend(p,papel) {
-  const isRet = p.tipo_mov !== undefined && p.destino !== undefined;
-  const tag   = isRet ? 'tag-ret' : 'tag-est';
-  // Label descritivo por origem
-  const orig  = String(p.origem_registro||'').toLowerCase();
+function renderPend(p, papel) {
+  const isRet   = p.qtd !== undefined && p.qtd_entrada === undefined;
+  const tag     = isRet ? 'tag-ret' : 'tag-est';
+  const orig    = String(p.origem_registro||'').toLowerCase();
   let label;
-  if (!isRet)                          label = 'Entrada estoque';
-  else if (orig==='motorista')         label = 'Retorno em rota';
-  else if (orig==='patio_distribuidor') label = 'Devolução no pátio';
-  else                                  label = 'Retorno vasilhame';
+  if (!isRet)                             label = 'Entrada Estoque';
+  else if (orig === 'motorista')          label = 'Retorno em Rota';
+  else if (orig === 'patio_distribuidor') label = 'Devolucao no Patio';
+  else                                    label = 'Retorno Vasilhame';
 
-  const quem     = p.destino||p.fornecedor||p.cliente||'—';
-  const prodNome = p.produto || p.sku || '';
-  const item     = prodNome + (p.qtd ? ' x ' + p.qtd : '');
-  const por      = p.registrado_por ? 'por ' + p.registrado_por : '';
+  const qtdVal   = isRet ? (p.qtd||0) : (parseFloat(p.qtd_entrada)>0 ? p.qtd_entrada : p.qtd_saida||0);
+  const prodNome = p.produto || p.sku || '—';
+  const quem     = isRet ? (p.destino||p.cliente||'—') : (p.fornecedor||'—');
+  const tipoMov  = p.tipo_mov || '';
+  const por      = p.registrado_por || '';
   const data     = p.data || '';
   const aba      = isRet ? 'retornaveis' : 'estoque';
-  return `<div class="pend-card" id="pc-${p.id}">
-    <div class="pend-head">
-      <div><div class="pend-tag ${tag}">${label}</div><div class="pend-cliente">${quem}</div></div>
-      <div class="pend-id">${(p.id||'').slice(-6)}</div>
-    </div>
-    <div class="pend-body">
-      <div class="pend-itens">${item}</div>
-      <div class="pend-meta">${por}${data?' · '+data:''}</div>
-      <div class="pend-btns">
-        <button class="pbtn pbtn-ok" onclick="valPend('${p.id}','${aba}','validado','${papel}')">✓ Confirmar</button>
-        <button class="pbtn pbtn-edit" onclick="editPend('${p.id}','${aba}','${papel}')">✏ Corrigir</button>
-      </div>
-    </div>
-  </div>`;
+  const ref      = p.ref || '';
+  const pid      = p.id || '';
+  const idSlice  = pid.slice(-6);
+
+  // Usar data-attributes para evitar problema de aspas no onclick
+  const div = document.createElement('div');
+  div.className = 'pend-card';
+  div.id = 'pc-' + pid;
+  div.innerHTML =
+    '<div class="pend-head">' +
+      '<div>' +
+        '<div class="pend-tag ' + tag + '">' + label + (tipoMov ? ' &middot; ' + tipoMov : '') + '</div>' +
+        '<div class="pend-cliente">' + quem + '</div>' +
+      '</div>' +
+      '<div class="pend-id">' + idSlice + '</div>' +
+    '</div>' +
+    '<div class="pend-body">' +
+      '<div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:2px">' + prodNome + '</div>' +
+      (qtdVal ? '<div style="font-size:13px;color:var(--b);font-weight:700;margin-bottom:5px">Quantidade: ' + qtdVal + ' un</div>' : '') +
+      '<div class="pend-meta">' + (por ? 'por ' + por : '') + (data ? ' &middot; ' + data : '') + '</div>' +
+      '<div class="pend-btns">' +
+        '<button class="pbtn pbtn-ok pend-btn-ok" data-id="' + pid + '" data-aba="' + aba + '" data-papel="' + papel + '" data-ref="' + ref + '">&#10003; Confirmar</button>' +
+        '<button class="pbtn pbtn-edit pend-btn-edit" data-id="' + pid + '" data-aba="' + aba + '" data-papel="' + papel + '">&#9998; Corrigir</button>' +
+      '</div>' +
+    '</div>';
+
+  // Bind eventos via JS (sem inline onclick — evita problema de aspas)
+  div.querySelector('.pend-btn-ok').addEventListener('click', function() {
+    valPend(pid, aba, 'validado', papel, ref);
+  });
+  div.querySelector('.pend-btn-edit').addEventListener('click', function() {
+    editPend(pid, aba, papel);
+  });
+
+  return div; // retorna elemento DOM
 }
 
-async function valPend(id,aba,status,papel) {
-  const card=document.getElementById('pc-'+id);
-  if(card){card.style.opacity='.4';card.style.pointerEvents='none';}
+
+async function valPend(id, aba, status, papel, ref) {
+  const card = document.getElementById('pc-'+id);
+  if (card) { card.style.opacity = '.4'; card.style.pointerEvents = 'none'; }
   try {
-    await api('validar_pendencia',{id,aba,status,validado_por:NOME});
+    await api('validar_pendencia', {id, aba, status, validado_por: NOME});
+    // Sincronizar par na outra aba pelo ref (mesmo lançamento, abas diferentes)
+    if (ref) {
+      try { await api('validar_por_ref', {ref, aba_origem: aba, status, validado_por: NOME}); }
+      catch(e) { /* par nao encontrado — ok */ }
+    }
     card?.remove();
-    toast(status==='validado'?'✓ Confirmado com sucesso':'✓ Rejeitado','ok');
-    const cont=document.getElementById('pend-'+papel);
-    if(cont&&!cont.querySelector('.pend-card')) cont.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-txt">Sem pendências</div></div>';
+    toast(status === 'validado' ? '&#10003; Confirmado' : 'Rejeitado', 'ok');
+    const cont = document.getElementById('pend-'+papel);
+    if (cont && !cont.querySelector('.pend-card')) {
+      cont.innerHTML = '<div class="empty"><div class="empty-icon">&#10003;</div><div class="empty-txt">Sem pendencias</div></div>';
+    }
   } catch(e) {
-    if(card){card.style.opacity='1';card.style.pointerEvents='';}
-    toast('Erro: '+e.message,'err');
+    if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+    toast('Erro: ' + e.message, 'err');
   }
 }
 
