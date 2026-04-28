@@ -83,7 +83,6 @@ body{min-height:100dvh;display:flex;flex-direction:column}
 input,select,textarea{width:100%;border:1.5px solid var(--bd);border-radius:var(--rad3);padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:15px;color:var(--ink);background:var(--bg);outline:none;transition:border-color .15s;-webkit-appearance:none}
 input:focus,select:focus,textarea:focus{border-color:var(--g);background:#fff}
 textarea{resize:vertical;min-height:64px}
-.row1{display:grid;grid-template-columns:1fr;gap:10px}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 
@@ -800,26 +799,25 @@ function formDefs(tipo) {
     titulo:'Envio para Fábrica', sub:'Barris vazios saindo',
     botao:'Confirmar envio',
     html:`
-      <div class="row1">
-        <div class="fg"><label>Operação</label>${selectEmpresa('emp-sf')}</div>
-        <div class="fg"><label><span class="req">*</span> Fábrica</label>
-          <select id="fab-sf">
-            <option value="Fábrica Leme">Fábrica Leme</option>
-            <option value="Fábrica Campinas A">Fábrica Campinas A</option>
-            <option value="Fábrica Campinas B">Fábrica Campinas B</option>
-          </select>
-        </div>
+      <div class="fg"><label><span class="req">*</span> Fábrica de destino</label>
+        <div><input id="fab-sf" type="text" autocomplete="off" placeholder="Buscar fábrica/fornecedor..."></div>
+      </div>
       <div class="slabel">Barris enviados (vazios)</div>
       <div class="items-wrap" id="itens-sf"></div>
       <button class="btn-add" onclick="addItem('itens-sf')">+ Adicionar SKU</button>
-      <div class="fg"><label>Observação</label>
+      <div class="fg" style="margin-top:8px"><label>Observação</label>
         <textarea id="obs-sf" placeholder="Pedido solicitado, observações..."></textarea>
       </div>`,
-    init: () => addItem('itens-sf'),
+    init: () => {
+      criarAC(document.getElementById('fab-sf'), q => opsForn(q), opt => {
+        document.getElementById('fab-sf')._val = opt.value;
+      });
+      addItem('itens-sf');
+    },
     submit: submitSaidaFabrica,
   };
 
-// ── ABASTECIMENTO ──────────────────────────────────────
+
   case 'abastecimento': return {
     titulo:'Abastecimento', sub:'Selecione o veículo da frota',
     botao:'Registrar abastecimento',
@@ -895,7 +893,7 @@ function formDefs(tipo) {
         } catch(e){}
         calcAbast();
       });
- 
+
       // Ao mudar origem, atualizar preço automaticamente
       document.getElementById('orig-ab')?.addEventListener('change', async (ev) => {
         updatePrecoCampo();
@@ -1229,7 +1227,7 @@ async function handleSub() {
 }
 
 async function submitSaidaFabrica() {
-  const fabrica = document.getElementById('fab-sf')?.value;
+  const fabrica = document.getElementById('fab-sf')?._val || document.getElementById('fab-sf')?.value;
   const itens   = coletarItens('itens-sf');
   const obs     = document.getElementById('obs-sf')?.value || '';
   if (!fabrica) throw new Error('Selecione a fábrica de destino');
@@ -1313,6 +1311,7 @@ async function submitEntradaEstoque(isFab=false) {
   voltarForm();
 }
 
+
 async function submitAbastecimento() {
   const placa   = document.getElementById('vei-ab')?.value;
   const origem  = document.getElementById('orig-ab')?.value;
@@ -1323,15 +1322,15 @@ async function submitAbastecimento() {
   const mot     = document.getElementById('mot-ab')?.value || NOME;
   const obs     = document.getElementById('obs-ab')?.value || '';
   const veiData = VEICULOS.find(v => v.placa === placa) || {};
- 
+
   if (!placa)  throw new Error('Selecione o veiculo');
   if (!litros) throw new Error('Informe os litros abastecidos');
   if (origem === 'posto' && !preco) throw new Error('Informe o preco por litro');
   if (!kma)    throw new Error('Informe o km atual');
- 
+
   const kmP = kma > kmb ? kma - kmb : 0;
   const kml = kmP > 0 && litros > 0 ? (kmP / litros).toFixed(1) : '—';
- 
+
   await api('abastecimento', {
     placa, modelo: veiData.modelo || '',
     origem_diesel: origem, litros,
@@ -1344,17 +1343,17 @@ async function submitAbastecimento() {
   toast(placa + ' — ' + litros + 'L' + (kmP ? ' · ' + kmP + 'km · ' + kml + 'km/L' : ''), 'ok');
   voltarForm();
 }
- 
+
 async function submitEntradaTanque() {
   const litros = parseFloat(document.getElementById('lit-et')?.value)||0;
   const preco  = parseFloat(document.getElementById('preco-et')?.value)||0;
   const forn   = document.getElementById('forn-et')?.value.trim();
   const obs    = document.getElementById('obs-et')?.value || '';
- 
+
   if (!litros) throw new Error('Informe os litros');
   if (!preco)  throw new Error('Informe o preco por litro');
   if (!forn)   throw new Error('Informe o fornecedor');
- 
+
   await api('entrada_tanque', {
     litros, preco_litro: preco,
     fornecedor: forn, empresa: 'Master',
@@ -1365,18 +1364,18 @@ async function submitEntradaTanque() {
   voltarForm();
   if (PAPEL === 'operacional') carregarSaldoTanque();
 }
- 
+
 async function submitAjusteEstoque() {
   const empresa  = document.getElementById('emp-aj')?.value || 'Master';
   const sku      = document.getElementById('sku-aj')?._sku || document.getElementById('sku-aj')?.value.trim();
   const positivo = document.getElementById('tipo-aj')?.value === 'true';
   const qtd      = parseFloat(document.getElementById('qtd-aj')?.value)||0;
   const motivo   = document.getElementById('obs-aj')?.value.trim();
- 
+
   if (!sku)    throw new Error('Informe o produto');
   if (!qtd)    throw new Error('Informe a quantidade');
   if (!motivo) throw new Error('Informe o motivo do ajuste');
- 
+
   await api('ajuste_estoque', {sku, qtd, positivo, empresa, motivo, registrado_por: NOME});
   toast('Ajuste registrado — aguarda validacao operacional', 'ok');
   voltarForm();
@@ -1475,14 +1474,15 @@ async function carregarPendencias(papel) {
       const retComercial = retTodos.filter(p => {
         const orig = String(p.origem_registro||'').toLowerCase().trim();
         const val  = String(p.validador||'').toLowerCase().trim();
-        return orig === 'patio_distribuidor' || val === 'comercial';
+        const tipo = String(p.tipo_mov||'').toLowerCase();
+        return orig === 'patio_distribuidor' || val === 'comercial' || tipo.includes('entrada f');
       });
 
       const estComercial = estTodos.filter(m => {
-        const sku = String(m.sku||'').toUpperCase();
-        // Omitir barris puros — o produto correspondente ja aparece no estoque
+        const sku  = String(m.sku||'').toUpperCase();
+        const tipo = String(m.tipo_mov||'').toLowerCase();
         if (sku.indexOf('BARRIL-') === 0) return false;
-        return true;
+        return tipo.includes('entrada compra') || tipo.includes('entrada f');
       });
 
       pends = [...retComercial, ...estComercial];
