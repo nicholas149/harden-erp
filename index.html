@@ -1452,52 +1452,89 @@ async function carregarPendencias(papel) {
       apiGet('retornaveis'),
       apiGet('estoque'),
     ]);
-    // Filtrar pendentes no cliente
     const retTodos = (r1.dados||[]).filter(m => String(m.status||'').toLowerCase() === 'pendente');
     const estTodos = (r2.dados||[]).filter(m => String(m.status||'').toLowerCase() === 'pendente');
     let pends = [];
 
     if (papel === 'patio') {
-      // PÁTIO vê APENAS retornos registrados por motoristas
-      pends = retTodos.filter(p => {
-        const orig = String(p.origem_registro||'').toLowerCase().trim();
-        const val  = String(p.validador||'').toLowerCase().trim();
-        return orig === 'motorista' || val === 'patio';
+      // PÁTIO vê: retornos de motoristas com etapa=patio
+      // Agrupa por motorista → 1 card por motorista com soma de barris
+      const retMotorista = retTodos.filter(p => {
+        const etapa = String(p.etapa||'').toLowerCase().trim();
+        const orig  = String(p.origem_registro||'').toLowerCase().trim();
+        const val   = String(p.validador||'').toLowerCase().trim();
+        return etapa === 'patio' || orig === 'motorista' || val === 'patio';
       });
+
+      // Agrupar por motorista (registrado_por)
+      const porMotorista = {};
+      retMotorista.forEach(p => {
+        const mot = p.registrado_por || 'Desconhecido';
+        if (!porMotorista[mot]) {
+          porMotorista[mot] = {
+            motorista: mot,
+            registros: [],
+            total_barris: 0,
+            skus: {},
+            data: p.data || '',
+          };
+        }
+        porMotorista[mot].registros.push(p);
+        porMotorista[mot].total_barris += parseFloat(p.qtd||0);
+        const sku = p.sku || p.produto || '';
+        if (!porMotorista[mot].skus[sku]) porMotorista[mot].skus[sku] = 0;
+        porMotorista[mot].skus[sku] += parseFloat(p.qtd||0);
+      });
+
+      pends = Object.values(porMotorista);
+      if (!pends.length) {
+        el.innerHTML = '<div class="empty"><div class="empty-icon">&#10003;</div><div class="empty-txt">Sem retornos pendentes</div></div>';
+        // Atualizar badge
+        const badge = document.getElementById('patio-badge');
+        if (badge) badge.style.display = 'none';
+        return;
+      }
+      // Atualizar badge com total de motoristas pendentes
+      const badge = document.getElementById('patio-badge');
+      if (badge) {
+        badge.textContent = pends.length;
+        badge.style.display = 'inline-flex';
+      }
+      el.innerHTML = '';
+      const lista = document.createElement('div');
+      lista.className = 'pend-list';
+      pends.forEach(grupo => lista.appendChild(renderPendMotorista(grupo)));
+      el.appendChild(lista);
+      return;
 
     } else if (papel === 'comercial') {
-      // COMERCIAL ve:
-      // 1. Retornaveis de clientes lancados pelo patio (distribuidor devolveu)
-      // 2. Entradas de estoque pendentes — mostra o PRODUTO (ex: Harden Pilsen 50L)
-      //    Barris puros (BARRIL-XXL) sao omitidos pois sao consequencia do produto
-
-      const retComercial = retTodos.filter(p => {
-        const orig = String(p.origem_registro||'').toLowerCase().trim();
-        const val  = String(p.validador||'').toLowerCase().trim();
-        const tipo = String(p.tipo_mov||'').toLowerCase();
-        return orig === 'patio_distribuidor' || val === 'comercial' || tipo.includes('entrada f');
+      // COMERCIAL vê: retornáveis com etapa=comercial (pátio já confirmou)
+      // + entradas de estoque pendentes (Entrada Compra, Entrada Fábrica)
+      const retCom = retTodos.filter(p => {
+        const etapa = String(p.etapa||'').toLowerCase().trim();
+        const orig  = String(p.origem_registro||'').toLowerCase().trim();
+        const val   = String(p.validador||'').toLowerCase().trim();
+        const tipo  = String(p.tipo_mov||'').toLowerCase();
+        return etapa === 'comercial'
+          || orig === 'patio_distribuidor'
+          || val === 'comercial'
+          || tipo.includes('entrada f');
       });
-
-      const estComercial = estTodos.filter(m => {
+      const estCom = estTodos.filter(m => {
         const sku  = String(m.sku||'').toUpperCase();
         const tipo = String(m.tipo_mov||'').toLowerCase();
         if (sku.indexOf('BARRIL-') === 0) return false;
-        return tipo.includes('entrada compra') || tipo.includes('entrada f');
+        return tipo.includes('entrada compra') || tipo.includes('entrada f') || tipo.includes('devoluc');
       });
-
-      pends = [...retComercial, ...estComercial];
+      pends = [...retCom, ...estCom];
     }
 
-    // Atualizar badge de contagem na aba do pátio
+    // Atualizar badge do pátio (reutilizado)
     if (papel === 'patio') {
       const badge = document.getElementById('patio-badge');
       if (badge) {
-        if (pends.length > 0) {
-          badge.textContent = pends.length;
-          badge.style.display = 'inline-flex';
-        } else {
-          badge.style.display = 'none';
-        }
+        badge.textContent = pends.length;
+        badge.style.display = pends.length > 0 ? 'inline-flex' : 'none';
       }
     }
 
@@ -1517,6 +1554,64 @@ async function carregarPendencias(papel) {
   }
 }
 
+
+function renderPendMotorista(grupo) {
+  // Card agrupado para o pátio: 1 card por motorista com todos os barris
+  const div = document.createElement('div');
+  div.className = 'pend-card';
+
+  // Resumo de SKUs
+  const skuList = Object.entries(grupo.skus)
+    .map(([sku, qtd]) => sku + ' × ' + qtd)
+    .join(', ');
+
+  div.innerHTML =
+    '<div class="pend-head">' +
+      '<div>' +
+        '<div class="pend-tag tag-ret">Retorno em Rota</div>' +
+        '<div class="pend-cliente" style="font-size:15px;font-weight:700">' + grupo.motorista + '</div>' +
+      '</div>' +
+      '<div class="pend-id" style="font-size:11px">' + grupo.registros.length + ' reg.</div>' +
+    '</div>' +
+    '<div class="pend-body">' +
+      '<div style="font-size:13px;color:var(--ink);margin-bottom:3px">' + skuList + '</div>' +
+      '<div style="font-size:15px;font-weight:700;color:var(--b);margin-bottom:5px">Total: ' + grupo.total_barris + ' un</div>' +
+      '<div class="pend-meta">' + (grupo.data ? grupo.data : '') + '</div>' +
+      '<div class="pend-btns">' +
+        '<button class="pbtn pbtn-ok pend-btn-ok-mot">&#10003; Confirmar tudo</button>' +
+        '<button class="pbtn pbtn-edit pend-btn-det-mot">&#128065; Detalhes</button>' +
+      '</div>' +
+    '</div>';
+
+  div.querySelector('.pend-btn-ok-mot').addEventListener('click', async function() {
+    this.disabled = true;
+    div.style.opacity = '.4';
+    try {
+      const r = await api('confirmar_patio', {
+        motorista: grupo.motorista,
+        validado_por: NOME,
+        status: 'validado',
+      });
+      div.remove();
+      toast('&#10003; ' + grupo.motorista + ' — ' + r.dados?.registros_liberados + ' reg. enviados para comercial', 'ok');
+      setTimeout(() => carregarPendencias('patio'), 500);
+    } catch(e) {
+      div.style.opacity = '1';
+      this.disabled = false;
+      toast('Erro: ' + e.message, 'err');
+    }
+  });
+
+  div.querySelector('.pend-btn-det-mot').addEventListener('click', function() {
+    // Mostrar detalhes por cliente
+    const detalhe = grupo.registros.map(r =>
+      (r.destino||'?') + ': ' + (r.sku||'') + ' × ' + r.qtd
+    ).join('\n');
+    alert('Detalhes — ' + grupo.motorista + ':\n\n' + detalhe);
+  });
+
+  return div;
+}
 
 function renderPend(p, papel) {
   const isRet   = p.qtd !== undefined && p.qtd_entrada === undefined;
