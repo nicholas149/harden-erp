@@ -1252,7 +1252,9 @@ async function submitRetornoMotorista() {
   if (!cliente) throw new Error('Informe o cliente');
   if (!itens.length) throw new Error('Adicione ao menos um produto');
   for (const it of itens) {
-    await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,destino:cliente,destino_id:cliId,empresa,registrado_por:NOME,origem_registro:'motorista',obs});
+    await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,
+    cliente:cliente, cliente_id:cliId,  // origem = cliente que devolveu
+    empresa, registrado_por:NOME, origem_registro:'motorista', obs});
   }
   toast('✓ Retorno registrado — aguarda validação do pátio','ok');
   voltarForm();
@@ -1267,7 +1269,9 @@ async function submitRetornoPatio() {
   if (!cliente) throw new Error('Informe o cliente');
   if (!itens.length) throw new Error('Adicione ao menos um produto');
   for (const it of itens) {
-    await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,destino:cliente,destino_id:cliId,empresa,registrado_por:NOME,origem_registro:'patio_distribuidor',obs});
+    await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,
+    cliente:cliente, cliente_id:cliId,  // origem = cliente que devolveu
+    empresa, registrado_por:NOME, origem_registro:'patio_distribuidor', obs});
   }
   toast('✓ Entrada registrada — aguarda validação do comercial','ok');
   voltarForm();
@@ -1626,7 +1630,8 @@ function renderPend(p, papel) {
   const qtdVal   = isRet ? (p.qtd||0) : (parseFloat(p.qtd_entrada)>0 ? p.qtd_entrada : p.qtd_saida||0);
   const prodNome = p.produto || p.sku || '—';
   const quem     = isRet ? (p.destino||p.cliente||'—') : (p.fornecedor||'—');
-  const tipoMov  = p.tipo_mov || '';
+  const tipoMov      = p.tipo_mov || '';
+  const tipo_mov_lower = tipoMov.toLowerCase();
   const por      = p.registrado_por || '';
   const data     = p.data || '';
   const aba      = isRet ? 'retornaveis' : 'estoque';
