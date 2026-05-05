@@ -1478,9 +1478,16 @@ async function submitOcorrencia() {
 // PENDÊNCIAS
 // ──────────────────────────────────────────────────────────────
 async function carregarPendencias(papel) {
-  const el = document.getElementById('pend-'+papel);
+  // Para comercial os painéis são dist/pdv separados; usar dist como loading principal
+  const elId = papel === 'comercial' ? 'pend-comercial-dist' : 'pend-' + papel;
+  const el = document.getElementById(elId);
   if (!el) return;
   el.innerHTML = '<div class="empty"><div class="empty-icon">&#8987;</div><div class="empty-txt">Carregando...</div></div>';
+  // Mostrar loading também no painel PDV se comercial
+  if (papel === 'comercial') {
+    const elPDV = document.getElementById('pend-comercial-pdv');
+    if (elPDV) elPDV.innerHTML = '<div class="empty"><div class="empty-icon">&#8987;</div><div class="empty-txt">Carregando...</div></div>';
+  }
   try {
     const [r1, r2] = await Promise.all([
       apiGet('retornaveis'),
