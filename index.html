@@ -1630,7 +1630,7 @@ function renderPend(p, papel) {
 
   const qtdVal   = isRet ? (p.qtd||0) : (parseFloat(p.qtd_entrada)>0 ? p.qtd_entrada : p.qtd_saida||0);
   const prodNome = p.produto || p.sku || '—';
-  const quem     = isRet ? (p.destino||p.cliente||'—') : (p.fornecedor||'—');
+  const quem     = isRet ? (p.origem||p.cliente||'—') : (p.fornecedor||'—');
   const tipoMov      = p.tipo_mov || '';
   const tipo_mov_lower = tipoMov.toLowerCase();
   const por      = p.registrado_por || '';
