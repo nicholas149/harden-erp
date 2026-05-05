@@ -1564,12 +1564,10 @@ async function carregarPendencias(papel) {
 
       // Separar PDV vs Distribuidores para o comercial
       const isPDV = (p) => {
-        // Verificar pelo campo origem (retornável) ou fornecedor (estoque)
-        const nomeCliente = p.origem || p.fornecedor || p.destino || '';
-        const cli = CLIENTES.find(c =>
-          (c.nome_canonico||'').toLowerCase() === nomeCliente.toLowerCase() ||
-          (c.nome_abrain||'').toLowerCase() === nomeCliente.toLowerCase()
-        );
+        // API de clientes retorna apenas {id, nome, tipo}
+        const nomeCliente = (p.origem || p.fornecedor || p.destino || '').toLowerCase().trim();
+        if (!nomeCliente || nomeCliente === 'pátio cd' || nomeCliente === 'patio cd') return false;
+        const cli = CLIENTES.find(c => (c.nome||'').toLowerCase().trim() === nomeCliente);
         return cli ? String(cli.tipo||'').toLowerCase() === 'pdv' : false;
       };
       const pendsDist = pends.filter(p => !isPDV(p));
@@ -1581,7 +1579,7 @@ async function carregarPendencias(papel) {
       const badgeDist = document.getElementById('com-badge-dist');
       const badgePDV  = document.getElementById('com-badge-pdv');
 
-      [[elDist, pendsDist, badgeDist, 'dist'], [elPDV, pendsPDV, badgePDV, 'pdv']].forEach(([el, pds, badge, tipo]) => {
+      [[elDist, pendsDist, badgeDist, 'dist'], [elPDV, pendsPDV, badgePDV, 'pdv']].forEach(([el, pds, badge]) => {
         if (!el) return;
         if (badge) {
           badge.textContent = pds.length;
@@ -1597,7 +1595,7 @@ async function carregarPendencias(papel) {
         el.innerHTML = '';
         el.appendChild(lista);
       });
-      return; // já renderizou nos dois painéis
+      return; // renderizado nos dois paineis
     }
 
     // Atualizar badge do pátio (reutilizado)
