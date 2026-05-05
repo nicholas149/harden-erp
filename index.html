@@ -1563,12 +1563,15 @@ async function carregarPendencias(papel) {
       pends = [...retCom, ...estCom];
 
       // Separar PDV vs Distribuidores para o comercial
+      // Mapa de nome → tipo para lookup rápido
+      const _tipoCliente = {};
+      CLIENTES.forEach(c => { if (c.nome) _tipoCliente[c.nome.toLowerCase().trim()] = (c.tipo||'').toLowerCase(); });
+
       const isPDV = (p) => {
-        // API de clientes retorna apenas {id, nome, tipo}
-        const nomeCliente = (p.origem || p.fornecedor || p.destino || '').toLowerCase().trim();
-        if (!nomeCliente || nomeCliente === 'pátio cd' || nomeCliente === 'patio cd') return false;
-        const cli = CLIENTES.find(c => (c.nome||'').toLowerCase().trim() === nomeCliente);
-        return cli ? String(cli.tipo||'').toLowerCase() === 'pdv' : false;
+        // Usar p.origem como nome do cliente (é o nome de quem devolveu)
+        // Comparar com nome_canonico da aba clientes (campo 'nome' na API)
+        const nome = (p.origem || p.fornecedor || '').toLowerCase().trim();
+        return _tipoCliente[nome] === 'pdv';
       };
       const pendsDist = pends.filter(p => !isPDV(p));
       const pendsPDV  = pends.filter(p => isPDV(p));
