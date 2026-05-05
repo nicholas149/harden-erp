@@ -409,12 +409,34 @@ if (document.readyState === 'loading') {
 ════════════════════════════════════════════════════ -->
 <div class="screen" id="sc-comercial">
   <div class="main">
-    <div class="content">
-      <div class="slabel" style="display:flex;align-items:center;justify-content:space-between">
-        <span>⏳ Aguardando sua validação</span>
-        <span onclick="carregarPendencias('comercial')" style="font-size:11px;color:var(--g);cursor:pointer;font-weight:500">↻ Atualizar</span>
+    <!-- Abas internas: Distribuidores | PDV -->
+    <div class="inner-tabs">
+      <div class="inner-tab active" id="com-tab-dist" onclick="comercialAba('dist')">
+        Distribuidores <span class="tab-badge" id="com-badge-dist" style="display:none">0</span>
       </div>
-      <div id="pend-comercial"></div>
+      <div class="inner-tab" id="com-tab-pdv" onclick="comercialAba('pdv')">
+        PDV <span class="tab-badge" id="com-badge-pdv" style="display:none">0</span>
+      </div>
+    </div>
+
+    <div class="content" style="padding-top:12px">
+      <!-- Painel Distribuidores -->
+      <div class="inner-panel active" id="com-panel-dist">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div class="slabel" style="margin:0">Distribuidores &amp; Entradas</div>
+          <span onclick="carregarPendencias('comercial')" style="font-size:11px;color:var(--g);cursor:pointer;font-weight:500">↻ Atualizar</span>
+        </div>
+        <div id="pend-comercial-dist"></div>
+      </div>
+
+      <!-- Painel PDV -->
+      <div class="inner-panel" id="com-panel-pdv">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div class="slabel" style="margin:0">PDV</div>
+          <span onclick="carregarPendencias('comercial')" style="font-size:11px;color:var(--g);cursor:pointer;font-weight:500">↻ Atualizar</span>
+        </div>
+        <div id="pend-comercial-pdv"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -647,6 +669,13 @@ function _ativarPapel(papel, nome) {
   if (papel==='patio')      carregarPendencias('patio');
   if (papel==='comercial')  carregarPendencias('comercial');
   if (papel==='operacional') carregarSaldoTanque();
+}
+
+function comercialAba(aba) {
+  document.getElementById('com-tab-dist').classList.toggle('active', aba === 'dist');
+  document.getElementById('com-tab-pdv').classList.toggle('active', aba === 'pdv');
+  document.getElementById('com-panel-dist').classList.toggle('active', aba === 'dist');
+  document.getElementById('com-panel-pdv').classList.toggle('active', aba === 'pdv');
 }
 
 function patioAba(aba) {
@@ -1532,6 +1561,43 @@ async function carregarPendencias(papel) {
         return tipo.includes('entrada compra') || tipo.includes('entrada f') || tipo.includes('devoluc');
       });
       pends = [...retCom, ...estCom];
+
+      // Separar PDV vs Distribuidores para o comercial
+      const isPDV = (p) => {
+        // Verificar pelo campo origem (retornável) ou fornecedor (estoque)
+        const nomeCliente = p.origem || p.fornecedor || p.destino || '';
+        const cli = CLIENTES.find(c =>
+          (c.nome_canonico||'').toLowerCase() === nomeCliente.toLowerCase() ||
+          (c.nome_abrain||'').toLowerCase() === nomeCliente.toLowerCase()
+        );
+        return cli ? String(cli.tipo||'').toLowerCase() === 'pdv' : false;
+      };
+      const pendsDist = pends.filter(p => !isPDV(p));
+      const pendsPDV  = pends.filter(p => isPDV(p));
+
+      // Renderizar em painéis separados
+      const elDist = document.getElementById('pend-comercial-dist');
+      const elPDV  = document.getElementById('pend-comercial-pdv');
+      const badgeDist = document.getElementById('com-badge-dist');
+      const badgePDV  = document.getElementById('com-badge-pdv');
+
+      [[elDist, pendsDist, badgeDist, 'dist'], [elPDV, pendsPDV, badgePDV, 'pdv']].forEach(([el, pds, badge, tipo]) => {
+        if (!el) return;
+        if (badge) {
+          badge.textContent = pds.length;
+          badge.style.display = pds.length > 0 ? 'inline-flex' : 'none';
+        }
+        if (!pds.length) {
+          el.innerHTML = '<div class="empty"><div class="empty-icon">&#10003;</div><div class="empty-txt">Sem pendencias</div></div>';
+          return;
+        }
+        const lista = document.createElement('div');
+        lista.className = 'pend-list';
+        pds.forEach(p => lista.appendChild(renderPend(p, papel)));
+        el.innerHTML = '';
+        el.appendChild(lista);
+      });
+      return; // já renderizou nos dois painéis
     }
 
     // Atualizar badge do pátio (reutilizado)
@@ -1630,7 +1696,7 @@ function renderPend(p, papel) {
 
   const qtdVal   = isRet ? (p.qtd||0) : (parseFloat(p.qtd_entrada)>0 ? p.qtd_entrada : p.qtd_saida||0);
   const prodNome = p.produto || p.sku || '—';
-  const quem     = isRet ? (p.origem||p.cliente||'—') : (p.fornecedor||'—');
+  const quem     = isRet ? (p.destino||p.cliente||'—') : (p.fornecedor||'—');
   const tipoMov      = p.tipo_mov || '';
   const tipo_mov_lower = tipoMov.toLowerCase();
   const por      = p.registrado_por || '';
@@ -1676,10 +1742,14 @@ function renderPend(p, papel) {
 
 async function valPend(id, aba, status, papel, ref) {
   const card = document.getElementById('pc-'+id);
-  if (card) { card.style.opacity = '.4'; card.style.pointerEvents = 'none'; }
+  if (card) {
+    card.style.opacity = '.5';
+    card.style.pointerEvents = 'none';
+    // Feedback visual imediato no botão clicado
+    const btnOk = card.querySelector('.pend-btn-ok');
+    if (btnOk) { btnOk.textContent = '⌛ Confirmando...'; btnOk.disabled = true; }
+  }
   try {
-    // validarPendencia no script propaga automaticamente via op_id
-    // para todas as abas com o mesmo lançamento
     const r = await api('validar_pendencia', {id, aba, status, validado_por: NOME});
     card?.remove();
     // Remover também cards de outros registros com mesmo op_id que foram sincronizados
