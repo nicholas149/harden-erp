@@ -170,7 +170,7 @@ textarea{resize:vertical;min-height:64px}
 <body>
 
 <script>
-const PATIOCD = 'Pátio CD'; // Destino padrão para retornáveis no CD
+const PATIOCD = 'Pátio CD'; //  padrão para retornáveis no CD
 const API = 'https://script.google.com/macros/s/AKfycbxholHSDhAuzenkGyrBAukgqdNaJXArt5YBL-pRRELOHDC2uOHu_5M59eIawYWYytb2/exec';
 
 // Cache de dados da planilha
@@ -1578,7 +1578,7 @@ async function carregarPendencias(papel) {
         // Usar p.origem como nome do cliente (é o nome de quem devolveu)
         // Comparar com nome_canonico da aba clientes (campo 'nome' na API)
         const nome = (p.origem || p.fornecedor || '').toLowerCase().trim();
-        return _tipoCliente[nome] === 'pdv';
+        return _tipoCliente[nome] === 'PDV';
       };
       const pendsDist = pends.filter(p => !isPDV(p));
       const pendsPDV  = pends.filter(p => isPDV(p));
