@@ -1577,8 +1577,8 @@ async function carregarPendencias(papel) {
       const isPDV = (p) => {
         // Usar p.origem como nome do cliente (é o nome de quem devolveu)
         // Comparar com nome_canonico da aba clientes (campo 'nome' na API)
-        const nome = (p.origem || p.fornecedor || '').toLowerCase().trim();
-        return _tipoCliente[nome] === 'PDV';
+        const nome = (p.origem_registro || p.fornecedor || '').toLowerCase().trim();
+        return _tipoCliente[nome] === 'pdv';
       };
       const pendsDist = pends.filter(p => !isPDV(p));
       const pendsPDV  = pends.filter(p => isPDV(p));
