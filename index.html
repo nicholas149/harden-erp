@@ -1686,7 +1686,7 @@ function renderPendMotorista(grupo) {
   div.querySelector('.pend-btn-det-mot').addEventListener('click', function() {
     // Mostrar detalhes por cliente
     const detalhe = grupo.registros.map(r =>
-      (r.destino||'?') + ': ' + (r.sku||'') + ' × ' + r.qtd
+      (r.origem||'?') + ': ' + (r.sku||'') + ' × ' + r.qtd
     ).join('\n');
     alert('Detalhes — ' + grupo.motorista + ':\n\n' + detalhe);
   });
