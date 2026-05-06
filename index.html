@@ -170,7 +170,7 @@ textarea{resize:vertical;min-height:64px}
 <body>
 
 <script>
-const PATIOCD = 'Pátio CD'; //  padrão para retornáveis no CD
+const PATIOCD = 'Pátio CD'; // Destino padrão para retornáveis no CD
 const API = 'https://script.google.com/macros/s/AKfycbxholHSDhAuzenkGyrBAukgqdNaJXArt5YBL-pRRELOHDC2uOHu_5M59eIawYWYytb2/exec';
 
 // Cache de dados da planilha
@@ -1570,15 +1570,17 @@ async function carregarPendencias(papel) {
       pends = [...retCom, ...estCom];
 
       // Separar PDV vs Distribuidores para o comercial
-      // Mapa de nome → tipo para lookup rápido
-      const _tipoCliente = {};
-      CLIENTES.forEach(c => { if (c.nome) _tipoCliente[c.nome.toLowerCase().trim()] = (c.tipo||'').toLowerCase(); });
+      // Mapa nome → tipo para lookup rápido (usando nome exato da API)
+      const _tipoMap = {};
+      CLIENTES.forEach(c => { if (c.nome) _tipoMap[c.nome.trim()] = (c.tipo||'').trim(); });
+
+      // Tipos que vão para aba PDV: PDV, DELV., Quiosque
+      const TIPOS_PDV = ['PDV', 'DELV.', 'Quiosque'];
 
       const isPDV = (p) => {
-        // Usar p.origem como nome do cliente (é o nome de quem devolveu)
-        // Comparar com nome_canonico da aba clientes (campo 'nome' na API)
-        const nome = (p.origem_registro || p.fornecedor || '').toLowerCase().trim();
-        return _tipoCliente[nome] === 'pdv';
+        const nome = (p.origem || p.fornecedor || '').trim();
+        const tipo = _tipoMap[nome] || '';
+        return TIPOS_PDV.includes(tipo);
       };
       const pendsDist = pends.filter(p => !isPDV(p));
       const pendsPDV  = pends.filter(p => isPDV(p));
@@ -1704,7 +1706,7 @@ function renderPend(p, papel) {
 
   const qtdVal   = isRet ? (p.qtd||0) : (parseFloat(p.qtd_entrada)>0 ? p.qtd_entrada : p.qtd_saida||0);
   const prodNome = p.produto || p.sku || '—';
-  const quem     = isRet ? (p.origem||p.cliente||'—') : (p.fornecedor||'—');
+  const quem     = isRet ? (p.destino||p.cliente||'—') : (p.fornecedor||'—');
   const tipoMov      = p.tipo_mov || '';
   const tipo_mov_lower = tipoMov.toLowerCase();
   const por      = p.registrado_por || '';
