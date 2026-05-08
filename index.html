@@ -123,6 +123,10 @@ textarea{resize:vertical;min-height:64px}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .btn-row{display:flex;flex-direction:column;gap:8px;padding-bottom:24px}
 
+/* ── Checkbox carregamento ─────────────────────────────── */
+.carreg-tick{display:inline-block;width:22px;height:22px;border:2px solid var(--bd);border-radius:6px;background:var(--bg);transition:all .15s;position:relative}
+.carreg-chk:checked+.carreg-tick{background:var(--g);border-color:var(--g)}
+.carreg-chk:checked+.carreg-tick::after{content:'✓';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:14px;font-weight:700;line-height:1}
 /* ── Pendências ───────────────────────────────────────── */
 .pend-list{display:flex;flex-direction:column;gap:8px}
 .pend-card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rad);overflow:hidden;box-shadow:var(--sh)}
@@ -813,8 +817,9 @@ function renderCarregamento(ped) {
     html += '    style="width:48px;padding:6px 4px;text-align:center;border:1.5px solid var(--bd);border-radius:6px;font-size:14px;font-weight:600;font-family:DM Sans">';
     html += '</td>';
     html += '<td style="padding:8px 6px;text-align:center">';
-    html += '  <label style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;padding:4px">';
-    html += '    <input type="checkbox" class="carreg-chk" checked style="width:20px;height:20px;accent-color:var(--g);cursor:pointer">';
+    html += '  <label class="carreg-label" style="display:flex;align-items:center;justify-content:center;cursor:pointer;padding:4px">';
+    html += '    <input type="checkbox" class="carreg-chk" checked style="position:absolute;opacity:0;width:0;height:0">';
+    html += '    <span class="carreg-tick"></span>';
     html += '  </label>';
     html += '</td>';
     html += '</tr>';
