@@ -802,7 +802,7 @@ function renderCarregamento(ped) {
     const itemId = item.id || (ped.pedido + '-' + idx);
 
     html += '<tr data-carreg-pedido="' + ped.pedido + '" data-carreg-id="' + itemId + '" style="border-bottom:1px solid var(--bd)">';
-    html += '<td style="padding:8px 10px">';
+    html += '<td style="padding:10px">';
     html += '  <div style="font-weight:500;line-height:1.3">' + prodNome + '</div>';
     if (litBarril > 0) {
       html += '  <div style="font-size:10px;color:var(--ink4)">Barril ' + litBarril + 'L</div>';
@@ -810,10 +810,12 @@ function renderCarregamento(ped) {
     html += '</td>';
     html += '<td style="padding:8px 6px;text-align:center">';
     html += '  <input type="number" class="carreg-qtd" value="' + qtdBarris + '" step="0.01" min="0"';
-    html += '    style="width:48px;padding:4px;text-align:center;border:1.5px solid var(--bd);border-radius:6px;font-size:14px;font-weight:600;font-family:DM Sans">';
+    html += '    style="width:48px;padding:6px 4px;text-align:center;border:1.5px solid var(--bd);border-radius:6px;font-size:14px;font-weight:600;font-family:DM Sans">';
     html += '</td>';
     html += '<td style="padding:8px 6px;text-align:center">';
-    html += '  <input type="checkbox" class="carreg-chk" checked style="width:18px;height:18px;accent-color:var(--g)">';
+    html += '  <label style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;padding:4px">';
+    html += '    <input type="checkbox" class="carreg-chk" checked style="width:20px;height:20px;accent-color:var(--g);cursor:pointer">';
+    html += '  </label>';
     html += '</td>';
     html += '</tr>';
   });
