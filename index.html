@@ -723,7 +723,7 @@ async function carregarCarregamentos() {
     // Agrupar por pedido → cliente
     const porPedido = {};
     itens.forEach(item => {
-      const chave = String(item['nº_pedido'] || item.n_pedido || item.no_pedido || '');
+      const chave = String(item['nº_pedido'] || item.n_pedido || item.no_pedido || item.pedido || '');
       if (!porPedido[chave]) {
         porPedido[chave] = {
           pedido: chave,
