@@ -733,6 +733,7 @@ async function carregarCarregamentos() {
           pedido: chave,
           cliente: item.cliente || '',
           data: item.data || '',
+          origem: item.origem || '',
           itens: [],
           valorTotal: 0
         };
@@ -774,9 +775,10 @@ function renderCarregamento(ped) {
   });
 
   let html = '';
+  const origemLabel = ped.origem ? ' · ' + ped.origem.replace('Bling ', '') : '';
   html += '<div class="pend-head" style="background:var(--a2)">';
   html += '  <div>';
-  html += '    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--a)">🚛 Pedido ' + ped.pedido + '</div>';
+  html += '    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--a)">🚛 Pedido ' + ped.pedido + '<span style="color:var(--ink4);font-weight:500">' + origemLabel + '</span></div>';
   html += '    <div class="pend-cliente" style="margin-top:4px">' + ped.cliente + '</div>';
   html += '    <div style="font-size:11px;color:var(--ink3)">' + ped.data + '</div>';
   html += '  </div>';
