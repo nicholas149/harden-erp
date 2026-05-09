@@ -573,11 +573,17 @@ function _acSelect(el) {
   if (list._onSelect) list._onSelect(opt);
 }
 
+function _buscaSemelhanca(texto, query) {
+  const t = (texto||'').toLowerCase();
+  const palavras = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return palavras.every(p => t.includes(p));
+}
+
 function opsCli(q, tipoFiltro) {
   if (!CLIENTES.length) return [{label:'Carregando clientes...', meta:'', value:''}];
   return CLIENTES
     .filter(c => {
-      const nomeOk = (c.nome||'').toLowerCase().includes(q);
+      const nomeOk = _buscaSemelhanca(c.nome, q);
       const tipoOk = !tipoFiltro || c.tipo === tipoFiltro;
       return nomeOk && tipoOk;
     })
@@ -588,9 +594,9 @@ function opsCli(q, tipoFiltro) {
 function opsProd(q) {
   if (!PRODUTOS.length) return [{label:'Carregando produtos...', meta:'', value:''}];
   return PRODUTOS
-    .filter(p => (p.nome||'').toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q))
+    .filter(p => _buscaSemelhanca(p.nome, q) || _buscaSemelhanca(p.sku, q))
     .slice(0,8)
-    .map(p => ({label:p.sku+' - '+p.nome, meta:p.cat, value:p.sku, ...p}));
+    .map(p => ({label:p.nome, meta:p.sku + (p.cat ? ' · ' + p.cat : ''), value:p.sku, ...p}));
 }
 
 function opsForn(q) {
