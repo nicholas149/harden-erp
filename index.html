@@ -1836,59 +1836,81 @@ function renderPendMotorista(grupo) {
   div.className = 'pend-card';
   div.style.borderLeft = '4px solid var(--b)';
 
-  // Agrupar registros por cliente (origem) para listar produtos por cliente
+  // === Agregar total por produto (visao resumida) ===
+  const totalPorProd = {};
+  grupo.registros.forEach(r => {
+    const prod = r.produto || r.sku || 'Produto';
+    if (!totalPorProd[prod]) totalPorProd[prod] = { qtd: 0, sku: r.sku || '' };
+    totalPorProd[prod].qtd += parseFloat(r.qtd || 0);
+  });
+
+  // === Agregar por cliente > produto (visao detalhada) ===
   const porCliente = {};
   grupo.registros.forEach(r => {
     const cli = r.origem || r.terceiro || 'Sem cliente';
-    if (!porCliente[cli]) porCliente[cli] = [];
-    porCliente[cli].push(r);
+    if (!porCliente[cli]) porCliente[cli] = {};
+    const prod = r.produto || r.sku || 'Produto';
+    if (!porCliente[cli][prod]) porCliente[cli][prod] = { qtd: 0, sku: r.sku || '' };
+    porCliente[cli][prod].qtd += parseFloat(r.qtd || 0);
   });
+  const numClientes = Object.keys(porCliente).length;
 
-  // Cabecalho estilo carregamento
+  // === Cabecalho ===
   let html = '';
   html += '<div class="pend-head" style="background:var(--b2)">';
   html += '  <div>';
   html += '    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--b)">🚛 Retorno em Rota</div>';
   html += '    <div class="pend-cliente" style="margin-top:4px;font-size:15px;font-weight:700">' + grupo.motorista + '</div>';
-  html += '    <div style="font-size:11px;color:var(--ink3)">' + (grupo.data || '') + ' · ' + grupo.registros.length + ' registros</div>';
+  html += '    <div style="font-size:11px;color:var(--ink3)">' + (grupo.data || '') + ' · ' + numClientes + ' cliente(s)</div>';
   html += '  </div>';
   html += '  <div style="text-align:right">';
   html += '    <div style="font-size:20px;font-weight:700;color:var(--b)">' + grupo.total_barris + '</div>';
-  html += '    <div style="font-size:10px;color:var(--ink3)">barris</div>';
+  html += '    <div style="font-size:10px;color:var(--ink3)">unidades</div>';
   html += '  </div>';
   html += '</div>';
 
-  // Tabela de itens agrupados por cliente
+  // === Tabela resumida: total por produto ===
   html += '<div class="pend-body" style="padding:0">';
   html += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
   html += '<thead><tr style="background:var(--bg);border-bottom:1px solid var(--bd)">';
   html += '<th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:600;color:var(--ink3)">Produto</th>';
-  html += '<th style="padding:8px 6px;text-align:center;font-size:11px;font-weight:600;color:var(--ink3);width:50px">Qtd</th>';
-  html += '<th style="padding:8px 6px;text-align:left;font-size:11px;font-weight:600;color:var(--ink3)">Cliente</th>';
+  html += '<th style="padding:8px 10px;text-align:center;font-size:11px;font-weight:600;color:var(--ink3);width:55px">Qtd</th>';
   html += '</tr></thead><tbody>';
 
-  Object.entries(porCliente).forEach(([cli, regs]) => {
-    // Agrupar por produto dentro do cliente
-    const porProd = {};
-    regs.forEach(r => {
-      const prod = r.produto || r.sku || 'Produto';
-      if (!porProd[prod]) porProd[prod] = { qtd: 0, sku: r.sku || '' };
-      porProd[prod].qtd += parseFloat(r.qtd || 0);
-    });
+  Object.entries(totalPorProd).forEach(([prod, info]) => {
+    html += '<tr style="border-bottom:1px solid var(--bd)">';
+    html += '<td style="padding:8px 10px">';
+    html += '  <div style="font-weight:500;line-height:1.3">' + prod + '</div>';
+    if (info.sku && info.sku !== prod) {
+      html += '  <div style="font-size:10px;color:var(--ink4)">' + info.sku + '</div>';
+    }
+    html += '</td>';
+    html += '<td style="padding:8px 10px;text-align:center;font-weight:700;font-size:14px">' + info.qtd + '</td>';
+    html += '</tr>';
+  });
 
-    const prods = Object.entries(porProd);
-    prods.forEach(([prod, info], idx) => {
+  html += '</tbody></table>';
+  html += '</div>';
+
+  // === Detalhe por cliente (oculto por padrao) ===
+  html += '<div class="mot-detalhe" style="display:none;border-top:2px solid var(--b);background:var(--b2)">';
+  html += '<div style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--b);text-transform:uppercase;letter-spacing:.5px">Detalhamento por Cliente</div>';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html += '<thead><tr style="background:rgba(24,95,165,.08);border-bottom:1px solid var(--bd)">';
+  html += '<th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--ink3)">Cliente</th>';
+  html += '<th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--ink3)">Produto</th>';
+  html += '<th style="padding:6px 6px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:45px">Qtd</th>';
+  html += '</tr></thead><tbody>';
+
+  Object.entries(porCliente).forEach(([cli, prods]) => {
+    const prodEntries = Object.entries(prods);
+    prodEntries.forEach(([prod, info], idx) => {
       html += '<tr style="border-bottom:1px solid var(--bd)">';
-      html += '<td style="padding:8px 10px">';
-      html += '  <div style="font-weight:500;line-height:1.3">' + prod + '</div>';
-      if (info.sku && info.sku !== prod) {
-        html += '  <div style="font-size:10px;color:var(--ink4)">' + info.sku + '</div>';
-      }
-      html += '</td>';
-      html += '<td style="padding:8px 6px;text-align:center;font-weight:600">' + info.qtd + '</td>';
       if (idx === 0) {
-        html += '<td style="padding:8px 6px;font-size:12px;color:var(--ink2)" rowspan="' + prods.length + '">' + cli + '</td>';
+        html += '<td style="padding:6px 10px;font-weight:600;font-size:12px;vertical-align:top" rowspan="' + prodEntries.length + '">' + cli + '</td>';
       }
+      html += '<td style="padding:6px 10px;font-size:12px">' + prod + '</td>';
+      html += '<td style="padding:6px 6px;text-align:center;font-weight:600">' + info.qtd + '</td>';
       html += '</tr>';
     });
   });
@@ -1896,14 +1918,24 @@ function renderPendMotorista(grupo) {
   html += '</tbody></table>';
   html += '</div>';
 
-  // Rodape com botao
-  html += '<div style="padding:10px 13px;border-top:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between">';
-  html += '  <span style="font-size:11px;color:var(--ink4)">' + Object.keys(porCliente).length + ' cliente(s)</span>';
+  // === Rodape ===
+  html += '<div style="padding:10px 13px;border-top:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;gap:8px">';
+  html += '  <button class="pbtn pbtn-edit pend-btn-det-mot" style="font-size:12px;padding:7px 12px">&#128065; Detalhes</button>';
   html += '  <button class="btn btn-primary pend-btn-ok-mot" style="width:auto;padding:9px 18px;font-size:13px">✓ Confirmar Retorno</button>';
   html += '</div>';
 
   div.innerHTML = html;
 
+  // Toggle detalhes
+  const detalheEl = div.querySelector('.mot-detalhe');
+  const btnDet = div.querySelector('.pend-btn-det-mot');
+  btnDet.addEventListener('click', function() {
+    const aberto = detalheEl.style.display !== 'none';
+    detalheEl.style.display = aberto ? 'none' : 'block';
+    btnDet.innerHTML = aberto ? '&#128065; Detalhes' : '&#128065; Ocultar';
+  });
+
+  // Confirmar
   div.querySelector('.pend-btn-ok-mot').addEventListener('click', async function() {
     this.disabled = true;
     this.textContent = '⌛ Confirmando...';
