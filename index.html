@@ -1832,35 +1832,81 @@ async function carregarPendencias(papel) {
 
 
 function renderPendMotorista(grupo) {
-  // Card agrupado para o pátio: 1 card por motorista com todos os barris
   const div = document.createElement('div');
   div.className = 'pend-card';
+  div.style.borderLeft = '4px solid var(--b)';
 
-  // Resumo de SKUs
-  const skuList = Object.entries(grupo.skus)
-    .map(([sku, qtd]) => sku + ' × ' + qtd)
-    .join(', ');
+  // Agrupar registros por cliente (origem) para listar produtos por cliente
+  const porCliente = {};
+  grupo.registros.forEach(r => {
+    const cli = r.origem || r.terceiro || 'Sem cliente';
+    if (!porCliente[cli]) porCliente[cli] = [];
+    porCliente[cli].push(r);
+  });
 
-  div.innerHTML =
-    '<div class="pend-head">' +
-      '<div>' +
-        '<div class="pend-tag tag-ret">Retorno em Rota</div>' +
-        '<div class="pend-cliente" style="font-size:15px;font-weight:700">' + grupo.motorista + '</div>' +
-      '</div>' +
-      '<div class="pend-id" style="font-size:11px">' + grupo.registros.length + ' reg.</div>' +
-    '</div>' +
-    '<div class="pend-body">' +
-      '<div style="font-size:13px;color:var(--ink);margin-bottom:3px">' + skuList + '</div>' +
-      '<div style="font-size:15px;font-weight:700;color:var(--b);margin-bottom:5px">Total: ' + grupo.total_barris + ' un</div>' +
-      '<div class="pend-meta">' + (grupo.data ? grupo.data : '') + '</div>' +
-      '<div class="pend-btns">' +
-        '<button class="pbtn pbtn-ok pend-btn-ok-mot">&#10003; Confirmar tudo</button>' +
-        '<button class="pbtn pbtn-edit pend-btn-det-mot">&#128065; Detalhes</button>' +
-      '</div>' +
-    '</div>';
+  // Cabecalho estilo carregamento
+  let html = '';
+  html += '<div class="pend-head" style="background:var(--b2)">';
+  html += '  <div>';
+  html += '    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--b)">🚛 Retorno em Rota</div>';
+  html += '    <div class="pend-cliente" style="margin-top:4px;font-size:15px;font-weight:700">' + grupo.motorista + '</div>';
+  html += '    <div style="font-size:11px;color:var(--ink3)">' + (grupo.data || '') + ' · ' + grupo.registros.length + ' registros</div>';
+  html += '  </div>';
+  html += '  <div style="text-align:right">';
+  html += '    <div style="font-size:20px;font-weight:700;color:var(--b)">' + grupo.total_barris + '</div>';
+  html += '    <div style="font-size:10px;color:var(--ink3)">barris</div>';
+  html += '  </div>';
+  html += '</div>';
+
+  // Tabela de itens agrupados por cliente
+  html += '<div class="pend-body" style="padding:0">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+  html += '<thead><tr style="background:var(--bg);border-bottom:1px solid var(--bd)">';
+  html += '<th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:600;color:var(--ink3)">Produto</th>';
+  html += '<th style="padding:8px 6px;text-align:center;font-size:11px;font-weight:600;color:var(--ink3);width:50px">Qtd</th>';
+  html += '<th style="padding:8px 6px;text-align:left;font-size:11px;font-weight:600;color:var(--ink3)">Cliente</th>';
+  html += '</tr></thead><tbody>';
+
+  Object.entries(porCliente).forEach(([cli, regs]) => {
+    // Agrupar por produto dentro do cliente
+    const porProd = {};
+    regs.forEach(r => {
+      const prod = r.produto || r.sku || 'Produto';
+      if (!porProd[prod]) porProd[prod] = { qtd: 0, sku: r.sku || '' };
+      porProd[prod].qtd += parseFloat(r.qtd || 0);
+    });
+
+    const prods = Object.entries(porProd);
+    prods.forEach(([prod, info], idx) => {
+      html += '<tr style="border-bottom:1px solid var(--bd)">';
+      html += '<td style="padding:8px 10px">';
+      html += '  <div style="font-weight:500;line-height:1.3">' + prod + '</div>';
+      if (info.sku && info.sku !== prod) {
+        html += '  <div style="font-size:10px;color:var(--ink4)">' + info.sku + '</div>';
+      }
+      html += '</td>';
+      html += '<td style="padding:8px 6px;text-align:center;font-weight:600">' + info.qtd + '</td>';
+      if (idx === 0) {
+        html += '<td style="padding:8px 6px;font-size:12px;color:var(--ink2)" rowspan="' + prods.length + '">' + cli + '</td>';
+      }
+      html += '</tr>';
+    });
+  });
+
+  html += '</tbody></table>';
+  html += '</div>';
+
+  // Rodape com botao
+  html += '<div style="padding:10px 13px;border-top:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between">';
+  html += '  <span style="font-size:11px;color:var(--ink4)">' + Object.keys(porCliente).length + ' cliente(s)</span>';
+  html += '  <button class="btn btn-primary pend-btn-ok-mot" style="width:auto;padding:9px 18px;font-size:13px">✓ Confirmar Retorno</button>';
+  html += '</div>';
+
+  div.innerHTML = html;
 
   div.querySelector('.pend-btn-ok-mot').addEventListener('click', async function() {
     this.disabled = true;
+    this.textContent = '⌛ Confirmando...';
     div.style.opacity = '.4';
     try {
       const r = await api('confirmar_patio', {
@@ -1874,16 +1920,9 @@ function renderPendMotorista(grupo) {
     } catch(e) {
       div.style.opacity = '1';
       this.disabled = false;
+      this.textContent = '✓ Confirmar Retorno';
       toast('Erro: ' + e.message, 'err');
     }
-  });
-
-  div.querySelector('.pend-btn-det-mot').addEventListener('click', function() {
-    // Mostrar detalhes por cliente
-    const detalhe = grupo.registros.map(r =>
-      (r.origem||'?') + ': ' + (r.sku||'') + ' × ' + r.qtd
-    ).join('\n');
-    alert('Detalhes — ' + grupo.motorista + ':\n\n' + detalhe);
   });
 
   return div;
