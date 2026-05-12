@@ -1432,11 +1432,11 @@ function addItem(containerId, comPreco=false) {
     ${['itens-rm','itens-rp'].includes(containerId) ? `
     <div class="troca-row">
       <label class="troca-label">
-        <input type="checkbox" id="ip-troca-${n}" class="troca-chk" onchange="document.getElementById('ip-motivo-troca-${n}').style.display=this.checked?'':'none'" style="position:absolute;opacity:0;width:0;height:0">
+        <input type="checkbox" id="ip-troca-${n}" class="troca-chk" onchange="document.getElementById('ip-val-troca-${n}').style.display=this.checked?'':'none'" style="position:absolute;opacity:0;width:0;height:0">
         <span class="troca-tick"></span>
         <span class="troca-lbl-txt">🔄 Troca?</span>
       </label>
-      <input type="text" id="ip-motivo-troca-${n}" placeholder="Motivo da troca..." style="display:none;flex:1;font-size:.82rem;padding:5px 10px;border:1.5px solid var(--bd);border-radius:6px">
+      <input type="date" id="ip-val-troca-${n}" placeholder="Validade" style="display:none;font-size:.82rem;padding:5px 10px;border:1.5px solid var(--bd);border-radius:6px">
     </div>` : ''}`;
   cnt.appendChild(d);
   criarAC(document.getElementById('ip-sku-'+n), q=>opsProd(q), opt=>{
@@ -1463,8 +1463,8 @@ function coletarItens(containerId, comPreco=false) {
     const qtd = parseFloat(document.getElementById('ip-qtd-'+n)?.value)||0;
     const preco = comPreco ? parseFloat(document.getElementById('ip-preco-'+n)?.value)||0 : 0;
     const troca = document.getElementById('ip-troca-'+n)?.checked || false;
-    const motivoTroca = troca ? (document.getElementById('ip-motivo-troca-'+n)?.value||'').trim() : '';
-    if ((sku||nome) && qtd>0) items.push({sku, nome, qtd, troca, motivo_troca: motivoTroca, ...(comPreco&&{preco_unitario:preco, valor_total:qtd*preco})});
+    const validadeTroca = troca ? (document.getElementById('ip-val-troca-'+n)?.value||'').trim() : '';
+    if ((sku||nome) && qtd>0) items.push({sku, nome, qtd, troca, validade_troca: validadeTroca, ...(comPreco&&{preco_unitario:preco, valor_total:qtd*preco})});
   });
   return items;
 }
@@ -1555,13 +1555,13 @@ async function submitRetornoMotorista() {
   if (!cliente) throw new Error('Informe o cliente');
   if (!itens.length) throw new Error('Adicione ao menos um produto');
   const temTroca = itens.some(it => it.troca);
-  if (temTroca && itens.filter(it=>it.troca).some(it=>!it.motivo_troca))
-    throw new Error('Informe o motivo da troca para os itens marcados');
+  if (temTroca && itens.filter(it=>it.troca).some(it=>!it.validade_troca))
+    throw new Error('Informe a data de validade para os itens de troca');
   for (const it of itens) {
     await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,
     cliente:cliente, cliente_id:cliId,
     empresa, registrado_por:NOME, origem_registro:'motorista', obs,
-    tipo_troca:it.troca, motivo_troca:it.motivo_troca});
+    tipo_troca:it.troca, validade_troca:it.validade_troca});
   }
   toast('✓ Retorno registrado — aguarda validação do pátio','ok');
   voltarForm();
@@ -1576,13 +1576,13 @@ async function submitRetornoPatio() {
   if (!cliente) throw new Error('Informe o cliente');
   if (!itens.length) throw new Error('Adicione ao menos um produto');
   const temTroca = itens.some(it => it.troca);
-  if (temTroca && itens.filter(it=>it.troca).some(it=>!it.motivo_troca))
-    throw new Error('Informe o motivo da troca para os itens marcados');
+  if (temTroca && itens.filter(it=>it.troca).some(it=>!it.validade_troca))
+    throw new Error('Informe a data de validade para os itens de troca');
   for (const it of itens) {
     await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,
     cliente:cliente, cliente_id:cliId,
     empresa, registrado_por:NOME, origem_registro:'patio_distribuidor', obs,
-    tipo_troca:it.troca, motivo_troca:it.motivo_troca});
+    tipo_troca:it.troca, validade_troca:it.validade_troca});
   }
   toast('✓ Entrada registrada — aguarda validação do comercial','ok');
   voltarForm();
@@ -2947,11 +2947,6 @@ async function carregarTrocas() {
     const dash = dashRes.dados || dashRes || {};
     const trocas = listRes.dados || listRes || [];
 
-    // Badge
-    const pendTotal = (dash.pendente||0) + (dash.enviado_fabrica||0) + (dash.pronto||0);
-    const badge = document.getElementById('com-badge-trocas');
-    if (badge) { badge.textContent = pendTotal; badge.style.display = pendTotal > 0 ? '' : 'none'; }
-
     // Dashboard resumo
     const dashEl = document.getElementById('dash-trocas');
     if (dashEl) {
@@ -2985,9 +2980,19 @@ async function carregarTrocas() {
     const listaEl = document.getElementById('lista-trocas');
     if (!listaEl) return;
 
-    // Filtrar: mostrar tudo exceto finalizados (entregue, nao_aprovado, uso_interno)
+    // Filtrar: mostrar tudo exceto finalizados, e só se estoque já validado
     const FINAIS = ['entregue', 'nao_aprovado', 'uso_interno'];
-    const ativas = trocas.filter(function(t) { return FINAIS.indexOf(String(t.status||'')) < 0; });
+    const ativas = trocas.filter(function(t) {
+      if (FINAIS.indexOf(String(t.status||'')) >= 0) return false;
+      // Só exibir se o estoque vinculado já foi validado
+      if (String(t.status_estoque||'').toLowerCase() !== 'validado') return false;
+      return true;
+    });
+
+    // Badge (baseado nas ativas/validadas)
+    const badge = document.getElementById('com-badge-trocas');
+    if (badge) { badge.textContent = ativas.length; badge.style.display = ativas.length > 0 ? '' : 'none'; }
+
     if (!ativas.length) {
       listaEl.innerHTML = '<div class="empty"><div class="empty-icon">🔄</div><div class="empty-txt">Nenhuma troca pendente</div></div>';
       return;
@@ -3032,35 +3037,50 @@ async function carregarTrocas() {
 }
 
 function _renderTrocaCard(t, cfg, statusAtual) {
+  var validade = t.validade || t.motivo || '';
   var html = '<div style="background:var(--card);border-radius:var(--rad2);border:1px solid var(--bd);margin-bottom:6px;overflow:hidden" id="troca-' + t.id + '">';
-  // Header
-  html += '<div style="padding:10px 12px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px">';
-  html += '  <div style="flex:1;min-width:0">';
-  html += '    <div style="font-weight:700;font-size:13px">' + (t.cliente || '—') + '</div>';
-  html += '    <div style="font-size:11px;color:var(--ink3)">' + (t.produto || t.sku || '') + ' · Qtd: <strong>' + (t.qtd || 0) + '</strong> · ' + (t.data || '') + '</div>';
-  if (t.motivo) html += '    <div style="font-size:11px;color:var(--a);margin-top:2px">Motivo: ' + t.motivo + '</div>';
-  if (t.pedido_troca) html += '    <div style="font-size:11px;color:var(--g);margin-top:2px">Pedido troca: #' + t.pedido_troca + '</div>';
+
+  // === Corpo principal: produto em destaque ===
+  html += '<div style="padding:10px 12px">';
+  // Linha 1: produto + qtd
+  html += '  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">';
+  html += '    <div style="font-weight:700;font-size:14px;line-height:1.3">' + (t.produto || t.sku || '—') + '</div>';
+  html += '    <div style="text-align:right;flex-shrink:0">';
+  html += '      <div style="font-size:18px;font-weight:700;color:' + cfg.cor + '">' + (t.qtd || 0) + '</div>';
+  html += '      <div style="font-size:9px;color:var(--ink4)">unid.</div>';
+  html += '    </div>';
   html += '  </div>';
-  // Botões de ação
-  html += '  <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0">';
-  if (cfg.acao) {
-    if (cfg.proximo === 'entregue') {
-      html += '    <input type="text" id="ped-troca-' + t.id + '" placeholder="Nº pedido" style="width:90px;font-size:11px;padding:4px 6px;border:1.5px solid var(--bd);border-radius:6px;text-align:center">';
-      html += '    <button class="btn btn-primary troca-acao-btn" data-id="' + t.id + '" data-proximo="' + cfg.proximo + '" style="font-size:11px;padding:6px 12px">' + cfg.acao + '</button>';
-    } else {
-      html += '    <button class="btn btn-primary troca-acao-btn" data-id="' + t.id + '" data-proximo="' + cfg.proximo + '" style="font-size:11px;padding:6px 12px;white-space:nowrap">' + cfg.acao + '</button>';
-    }
+  // Linha 2: validade
+  if (validade) {
+    html += '  <div style="display:inline-block;margin-top:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fef9c3;color:#92400e;border:1px solid #fde68a">📅 Val: ' + validade + '</div>';
   }
-  // Botão secundário: Uso Interno (no status pendente)
-  if (statusAtual === 'pendente') {
-    html += '    <button class="troca-sec-btn" data-id="' + t.id + '" data-acao="uso_interno" style="font-size:10px;padding:4px 10px;background:var(--b2);color:var(--b);border:1px solid var(--b);border-radius:6px;cursor:pointer;font-weight:600;white-space:nowrap">🏠 Uso Interno</button>';
-  }
-  // Botão secundário: Não Aprovado (no status pronto)
-  if (statusAtual === 'pronto') {
-    html += '    <button class="troca-sec-btn" data-id="' + t.id + '" data-acao="nao_aprovado" style="font-size:10px;padding:4px 10px;background:#fef2f2;color:var(--r);border:1px solid var(--r);border-radius:6px;cursor:pointer;font-weight:600;white-space:nowrap">✗ Não Aprovado</button>';
-  }
-  html += '  </div>';
+  // Linha 3: cliente + data (menor)
+  html += '  <div style="font-size:11px;color:var(--ink4);margin-top:4px">' + (t.cliente || '') + (t.data ? ' · ' + t.data : '') + '</div>';
+  if (t.pedido_troca) html += '  <div style="font-size:11px;color:var(--g);margin-top:2px">Pedido troca: #' + t.pedido_troca + '</div>';
   html += '</div>';
+
+  // === Rodapé com ações ===
+  if (statusAtual === 'pronto') {
+    // Layout especial para "pronto": campo nº pedido em destaque + botões
+    html += '<div style="padding:8px 12px;border-top:1px solid var(--bd);background:var(--g2)">';
+    html += '  <div style="font-size:10px;font-weight:600;color:var(--g);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Entregar ao cliente</div>';
+    html += '  <div style="display:flex;gap:6px;align-items:center">';
+    html += '    <input type="text" id="ped-troca-' + t.id + '" placeholder="Nº do pedido de troca" style="flex:1;font-size:13px;padding:8px 10px;border:1.5px solid var(--g3);border-radius:8px;background:var(--bg)">';
+    html += '    <button class="btn btn-primary troca-acao-btn" data-id="' + t.id + '" data-proximo="entregue" style="font-size:12px;padding:8px 14px;white-space:nowrap">✓ Entregue</button>';
+    html += '  </div>';
+    html += '  <div style="margin-top:6px;text-align:right">';
+    html += '    <button class="troca-sec-btn" data-id="' + t.id + '" data-acao="nao_aprovado" style="font-size:10px;padding:3px 8px;background:transparent;color:var(--r);border:none;cursor:pointer;font-weight:500;text-decoration:underline">Não aprovado</button>';
+    html += '  </div>';
+    html += '</div>';
+  } else if (cfg.acao) {
+    html += '<div style="padding:8px 12px;border-top:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between">';
+    html += '  <button class="btn btn-primary troca-acao-btn" data-id="' + t.id + '" data-proximo="' + cfg.proximo + '" style="font-size:11px;padding:6px 14px;white-space:nowrap">' + cfg.acao + '</button>';
+    if (statusAtual === 'pendente') {
+      html += '  <button class="troca-sec-btn" data-id="' + t.id + '" data-acao="uso_interno" style="font-size:10px;padding:4px 10px;background:var(--b2);color:var(--b);border:1px solid var(--b);border-radius:6px;cursor:pointer;font-weight:600;white-space:nowrap">🏠 Uso Interno</button>';
+    }
+    html += '</div>';
+  }
+
   html += '</div>';
   return html;
 }
