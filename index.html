@@ -1035,16 +1035,6 @@ function formDefs(tipo) {
       <button class="btn-add" onclick="addItem('itens-rp')">+ Adicionar produto</button>
       <div class="fg"><label>Observação</label>
         <textarea id="obs-rp" placeholder="Condição dos barris, observações..."></textarea>
-      </div>
-      <div class="fg" style="margin-top:4px">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" id="troca-rp" onchange="document.getElementById('motivo-troca-wrap').style.display=this.checked?'':'none'">
-          <span style="font-weight:600;color:var(--a)">🔄 É troca? (produto defeituoso)</span>
-        </label>
-      </div>
-      <div class="fg" id="motivo-troca-wrap" style="display:none">
-        <label>Motivo da troca</label>
-        <textarea id="motivo-rp" placeholder="Descreva o defeito: oxidado, contaminado, etc..."></textarea>
       </div>`,
     init: () => {
       initSeg('tipo-cli-rp');
@@ -1431,7 +1421,15 @@ function addItem(containerId, comPreco=false) {
       <div class="fg"><label>Total</label>
         <input type="text" id="ip-total-${n}" placeholder="—" readonly style="background:var(--g2);color:var(--g);font-weight:600">
       </div>` : ''}
-    </div>`;
+    </div>
+    ${['itens-rm','itens-rp'].includes(containerId) ? `
+    <div class="item-troca-row" style="display:flex;align-items:center;gap:6px;padding:2px 0 4px 2px">
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.82rem;color:var(--g)">
+        <input type="checkbox" id="ip-troca-${n}" onchange="document.getElementById('ip-motivo-troca-${n}').style.display=this.checked?'':'none'" style="accent-color:var(--a);width:15px;height:15px">
+        <span>🔄 Troca?</span>
+      </label>
+      <input type="text" id="ip-motivo-troca-${n}" placeholder="Motivo da troca..." style="display:none;flex:1;font-size:.82rem;padding:4px 8px;border:1px solid var(--g3);border-radius:6px">
+    </div>` : ''}`;
   cnt.appendChild(d);
   criarAC(document.getElementById('ip-sku-'+n), q=>opsProd(q), opt=>{
     document.getElementById('ip-sku-'+n)._sku = opt.value;
@@ -1456,7 +1454,9 @@ function coletarItens(containerId, comPreco=false) {
     const nome= el._nome || el.value.trim();
     const qtd = parseFloat(document.getElementById('ip-qtd-'+n)?.value)||0;
     const preco = comPreco ? parseFloat(document.getElementById('ip-preco-'+n)?.value)||0 : 0;
-    if ((sku||nome) && qtd>0) items.push({sku, nome, qtd, ...(comPreco&&{preco_unitario:preco, valor_total:qtd*preco})});
+    const troca = document.getElementById('ip-troca-'+n)?.checked || false;
+    const motivoTroca = troca ? (document.getElementById('ip-motivo-troca-'+n)?.value||'').trim() : '';
+    if ((sku||nome) && qtd>0) items.push({sku, nome, qtd, troca, motivo_troca: motivoTroca, ...(comPreco&&{preco_unitario:preco, valor_total:qtd*preco})});
   });
   return items;
 }
@@ -1546,10 +1546,14 @@ async function submitRetornoMotorista() {
   const obs     = document.getElementById('obs-rm')?.value;
   if (!cliente) throw new Error('Informe o cliente');
   if (!itens.length) throw new Error('Adicione ao menos um produto');
+  const temTroca = itens.some(it => it.troca);
+  if (temTroca && itens.filter(it=>it.troca).some(it=>!it.motivo_troca))
+    throw new Error('Informe o motivo da troca para os itens marcados');
   for (const it of itens) {
     await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,
-    cliente:cliente, cliente_id:cliId,  // origem = cliente que devolveu
-    empresa, registrado_por:NOME, origem_registro:'motorista', obs});
+    cliente:cliente, cliente_id:cliId,
+    empresa, registrado_por:NOME, origem_registro:'motorista', obs,
+    tipo_troca:it.troca, motivo_troca:it.motivo_troca});
   }
   toast('✓ Retorno registrado — aguarda validação do pátio','ok');
   voltarForm();
@@ -1561,16 +1565,16 @@ async function submitRetornoPatio() {
   const empresa = 'Master';
   const itens   = coletarItens('itens-rp');
   const obs     = document.getElementById('obs-rp')?.value;
-  const eTroca  = document.getElementById('troca-rp')?.checked || false;
-  const motivoTroca = document.getElementById('motivo-rp')?.value || '';
   if (!cliente) throw new Error('Informe o cliente');
   if (!itens.length) throw new Error('Adicione ao menos um produto');
-  if (eTroca && !motivoTroca.trim()) throw new Error('Informe o motivo da troca');
+  const temTroca = itens.some(it => it.troca);
+  if (temTroca && itens.filter(it=>it.troca).some(it=>!it.motivo_troca))
+    throw new Error('Informe o motivo da troca para os itens marcados');
   for (const it of itens) {
     await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,
     cliente:cliente, cliente_id:cliId,
     empresa, registrado_por:NOME, origem_registro:'patio_distribuidor', obs,
-    tipo_troca:eTroca, motivo_troca:motivoTroca});
+    tipo_troca:it.troca, motivo_troca:it.motivo_troca});
   }
   toast('✓ Entrada registrada — aguarda validação do comercial','ok');
   voltarForm();
