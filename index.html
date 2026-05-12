@@ -1716,6 +1716,36 @@ async function submitOcorrencia() {
 // ──────────────────────────────────────────────────────────────
 // PENDÊNCIAS
 // ──────────────────────────────────────────────────────────────
+// Deduplicar registros por op_id entre Retornáveis e Estoque.
+// Quando um mesmo op_id aparece nas duas abas (ex: retorno de chopp = barril em Ret + produto em Est),
+// manter apenas o registro do Estoque (tem o produto real) e remover o do Retornáveis.
+function _deduplicarPorOpId(retornaveis, estoque) {
+  // Mapear op_ids que existem no Estoque
+  const opIdsEst = {};
+  estoque.forEach(e => {
+    const op = String(e.op_id || '');
+    if (op) opIdsEst[op] = e;
+  });
+
+  // Filtrar retornáveis: remover os que têm op_id duplicado no Estoque
+  const retFiltrado = [];
+  retornaveis.forEach(r => {
+    const op = String(r.op_id || '');
+    if (op && opIdsEst[op]) {
+      // Marcar no estoque que tem retornável vinculado
+      opIdsEst[op]._tem_retornavel = true;
+      opIdsEst[op]._ret_id = r.id;
+      opIdsEst[op]._ret_sku = r.sku;
+      opIdsEst[op]._ret_produto = r.produto;
+      opIdsEst[op]._ret_qtd = r.qtd;
+    } else {
+      retFiltrado.push(r);
+    }
+  });
+
+  return retFiltrado;
+}
+
 async function carregarPendencias(papel) {
   // Para comercial os painéis são dist/pdv separados; usar dist como loading principal
   const elId = papel === 'comercial' ? 'pend-comercial-dist' : 'pend-' + papel;
@@ -1738,7 +1768,6 @@ async function carregarPendencias(papel) {
 
     if (papel === 'patio') {
       // PÁTIO vê: retornos de motoristas com etapa=patio
-      // Agrupa por motorista → 1 card por motorista com soma de barris
       const retMotorista = retTodos.filter(p => {
         const etapa = String(p.etapa||'').toLowerCase().trim();
         const orig  = String(p.origem_registro||'').toLowerCase().trim();
@@ -1746,9 +1775,20 @@ async function carregarPendencias(papel) {
         return etapa === 'patio' || orig === 'motorista' || val === 'patio';
       });
 
+      // Estoque pendentes que estão vinculados via op_id (produtos consignados devolvidos)
+      const estPatio = estTodos.filter(m => {
+        const tipo = String(m.tipo_mov||'').toLowerCase();
+        return tipo.includes('ajuste +') || tipo.includes('ajuste pos');
+      });
+
+      // Deduplicar: se Retornável e Estoque compartilham op_id,
+      // manter Estoque (produto real) e remover Retornável (barril)
+      const retDedupPatio = _deduplicarPorOpId(retMotorista, estPatio);
+      const todosPatio = [...retDedupPatio, ...estPatio];
+
       // Agrupar por motorista (registrado_por)
       const porMotorista = {};
-      retMotorista.forEach(p => {
+      todosPatio.forEach(p => {
         const mot = p.registrado_por || 'Desconhecido';
         if (!porMotorista[mot]) {
           porMotorista[mot] = {
@@ -1760,10 +1800,11 @@ async function carregarPendencias(papel) {
           };
         }
         porMotorista[mot].registros.push(p);
-        porMotorista[mot].total_barris += parseFloat(p.qtd||0);
-        const sku = p.sku || p.produto || '';
+        const qtd = parseFloat(p.qtd || p.qtd_entrada || 0);
+        porMotorista[mot].total_barris += qtd;
+        const sku = p.produto || p.sku || 'Produto';
         if (!porMotorista[mot].skus[sku]) porMotorista[mot].skus[sku] = 0;
-        porMotorista[mot].skus[sku] += parseFloat(p.qtd||0);
+        porMotorista[mot].skus[sku] += qtd;
       });
 
       pends = Object.values(porMotorista);
@@ -1806,7 +1847,11 @@ async function carregarPendencias(papel) {
         if (sku.indexOf('BARRIL-') === 0) return false;
         return tipo.includes('entrada compra') || tipo.includes('entrada f') || tipo.includes('devoluc') || tipo.includes('ajuste +') || tipo.includes('ajuste pos');
       });
-      pends = [...retCom, ...estCom];
+
+      // Deduplicar: se Retornável e Estoque compartilham op_id,
+      // manter Estoque (produto real) e remover Retornável (barril duplicado)
+      const retComDedup = _deduplicarPorOpId(retCom, estCom);
+      pends = [...retComDedup, ...estCom];
 
       // Separar PDV vs Distribuidores para o comercial
       // Mapa nome → tipo para lookup rápido (usando nome exato da API)
@@ -1910,18 +1955,22 @@ function renderPendMotorista(grupo) {
   const totalPorProd = {};
   grupo.registros.forEach(r => {
     const prod = r.produto || r.sku || 'Produto';
-    if (!totalPorProd[prod]) totalPorProd[prod] = { qtd: 0, sku: r.sku || '' };
-    totalPorProd[prod].qtd += parseFloat(r.qtd || 0);
+    const qtd = parseFloat(r.qtd || r.qtd_entrada || 0);
+    const isConsig = r._tem_retornavel || String(r.tipo_mov||'').toLowerCase().indexOf('ajuste') >= 0;
+    if (!totalPorProd[prod]) totalPorProd[prod] = { qtd: 0, sku: r.sku || '', consig: isConsig };
+    totalPorProd[prod].qtd += qtd;
+    if (isConsig) totalPorProd[prod].consig = true;
   });
 
   // === Agregar por cliente > produto (visao detalhada) ===
   const porCliente = {};
   grupo.registros.forEach(r => {
-    const cli = r.origem || r.terceiro || 'Sem cliente';
+    const cli = r.origem || r.fornecedor || r.terceiro || 'Sem cliente';
     if (!porCliente[cli]) porCliente[cli] = {};
     const prod = r.produto || r.sku || 'Produto';
+    const qtd = parseFloat(r.qtd || r.qtd_entrada || 0);
     if (!porCliente[cli][prod]) porCliente[cli][prod] = { qtd: 0, sku: r.sku || '' };
-    porCliente[cli][prod].qtd += parseFloat(r.qtd || 0);
+    porCliente[cli][prod].qtd += qtd;
   });
   const numClientes = Object.keys(porCliente).length;
 
@@ -1954,6 +2003,7 @@ function renderPendMotorista(grupo) {
     if (info.sku && info.sku !== prod) {
       html += '  <div style="font-size:10px;color:var(--ink4)">' + info.sku + '</div>';
     }
+    if (info.consig) html += '  <div style="font-size:9px;color:var(--b);font-weight:600;margin-top:1px">📦 Produto cheio (consignado)</div>';
     html += '</td>';
     html += '<td style="padding:8px 10px;text-align:center;font-weight:700;font-size:14px">' + info.qtd + '</td>';
     html += '</tr>';
@@ -2212,14 +2262,16 @@ function renderPendCliente(grupo, papel) {
 
   // Consignado inline: abrir painel, iniciar autocomplete, buscar pedido
   if (temConsignado) {
-    const consigPanel = document.getElementById(cid);
+    // Usar div.querySelector em vez de document.getElementById porque div ainda não está no DOM
+    const consigPanel = div.querySelector('#' + cid);
     div.querySelector('.consig-btn-abrir').addEventListener('click', function() {
+      if (!consigPanel) return;
       const aberto = consigPanel.classList.contains('open');
       consigPanel.classList.toggle('open');
       this.textContent = aberto ? '🔍 Buscar pedido original para ajustar venda' : '✕ Fechar busca';
       if (!aberto) {
         // Inicializar autocomplete do cliente no painel inline
-        const cliInp = document.getElementById(cid + '-cli');
+        const cliInp = div.querySelector('#' + cid + '-cli');
         if (cliInp && !cliInp._ac) {
           criarAC(cliInp, function(q) {
             return CLIENTES.filter(c => _buscaSemelhanca(c.nome, q) > 0.3)
@@ -2239,14 +2291,14 @@ function renderPendCliente(grupo, papel) {
 
     // Buscar por pedido
     div.querySelector('.' + cid + '-btn-buscar').addEventListener('click', function() {
-      const ped = document.getElementById(cid + '-ped')?.value?.trim();
+      const ped = div.querySelector('#' + cid + '-ped')?.value?.trim();
       if (!ped) { toast('Informe o nº do pedido', 'err'); return; }
       _buscarConsigInline(cid, { pedido: ped }, grupo, produtosConsig);
     });
 
     // Buscar por cliente
     div.querySelector('.' + cid + '-btn-buscar-cli').addEventListener('click', function() {
-      const cli = document.getElementById(cid + '-cli')?.value?.trim();
+      const cli = div.querySelector('#' + cid + '-cli')?.value?.trim();
       if (!cli) { toast('Informe o cliente', 'err'); return; }
       _buscarConsigInline(cid, { cliente: cli }, grupo, produtosConsig);
     });
@@ -2264,6 +2316,13 @@ function renderPendCliente(grupo, papel) {
         const aba = isRet ? 'retornaveis' : 'estoque';
         await api('validar_pendencia', { id: r.id, aba, status: 'validado', validado_por: NOME });
         confirmados++;
+        // Se este registro tem um retornável vinculado (via op_id dedup), validar também
+        if (r._ret_id) {
+          try {
+            await api('validar_pendencia', { id: r._ret_id, aba: 'retornaveis', status: 'validado', validado_por: NOME });
+            confirmados++;
+          } catch(e2) { console.warn('Erro validando retornável vinculado:', e2); }
+        }
       }
       div.remove();
       toast('✓ ' + grupo.cliente + ' — ' + confirmados + ' registro(s) confirmados', 'ok');
@@ -2511,6 +2570,11 @@ function renderMeuLancamento(p) {
   if (sku && sku !== produto) html += '  <div style="font-size:11px;color:var(--ink4);margin-bottom:2px">SKU: ' + sku + '</div>';
   if (tipoRet) html += '  <div style="font-size:11px;color:var(--ink3);margin-bottom:2px">Tipo: ' + tipoRet + '</div>';
   html += '  <div style="font-size:13px;color:var(--b);font-weight:700;margin-bottom:5px">Quantidade: ' + qtd + ' un</div>';
+  // Se tem retornável vinculado (consignado), mostrar info do barril
+  if (p._tem_retornavel && p._ret_sku) {
+    html += '  <div style="font-size:11px;color:var(--b);margin-bottom:4px;padding:4px 8px;background:var(--b2);border-radius:6px;border:1px solid var(--b)">';
+    html += '    📦 Consignado — Barril vinculado: ' + (p._ret_produto || p._ret_sku) + '</div>';
+  }
   if (p.obs) html += '  <div style="font-size:11px;color:var(--ink3);margin-bottom:5px">Obs: ' + p.obs + '</div>';
   html += '  <div class="pend-btns">';
   html += '    <button class="pbtn pbtn-edit ml-btn-edit">&#9998; Editar</button>';
@@ -2599,14 +2663,26 @@ function renderMeuLancamento(p) {
       const novaQtd = parseFloat(document.getElementById('ml-qtd-' + p.id)?.value) || 0;
 
       if (novoCli && novoCli !== cliente) {
-        campos.origem = novoCli;
+        // Estoque usa 'fornecedor', Retornáveis usa 'origem'
+        if (p._aba === 'estoque') {
+          campos.fornecedor = novoCli;
+        } else {
+          campos.origem = novoCli;
+        }
         if (cliInput._id) campos.origem_id = cliInput._id;
       }
       if (novoProd && novoProd !== produto) {
         campos.produto = novoProd;
         if (novoProdSku) campos.sku = novoProdSku;
       }
-      if (novaQtd > 0 && novaQtd !== parseFloat(qtd)) campos.qtd = novaQtd;
+      if (novaQtd > 0 && novaQtd !== parseFloat(qtd)) {
+        // Estoque usa 'qtd_entrada', Retornáveis usa 'qtd'
+        if (p._aba === 'estoque') {
+          campos.qtd_entrada = novaQtd;
+        } else {
+          campos.qtd = novaQtd;
+        }
+      }
 
       if (!Object.keys(campos).length) { toast('Nenhuma alteração', ''); return; }
 
@@ -2930,6 +3006,11 @@ async function _submitConsigInline(cid, itens, grupo, produtosConsig, btn) {
       try {
         await api('validar_pendencia', { id: reg.id, aba, status: 'validado', validado_por: NOME });
         confirmados++;
+        // Se tem retornável vinculado (deduplicado por op_id), validar também
+        if (reg._ret_id) {
+          await api('validar_pendencia', { id: reg._ret_id, aba: 'retornaveis', status: 'validado', validado_por: NOME });
+          confirmados++;
+        }
       } catch (e2) {
         console.warn('Erro validando ' + reg.id + ':', e2);
       }
