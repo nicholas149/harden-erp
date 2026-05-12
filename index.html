@@ -1786,19 +1786,45 @@ async function carregarPendencias(papel) {
       const badgeDist = document.getElementById('com-badge-dist');
       const badgePDV  = document.getElementById('com-badge-pdv');
 
-      [[elDist, pendsDist, badgeDist, 'dist'], [elPDV, pendsPDV, badgePDV, 'pdv']].forEach(([el, pds, badge]) => {
+      // Agrupar por cliente antes de renderizar
+      function agruparPorCliente(regs) {
+        const map = {};
+        regs.forEach(p => {
+          const cli = (p.origem || p.fornecedor || p.cliente || 'Sem cliente').trim();
+          if (!map[cli]) {
+            map[cli] = { cliente: cli, registros: [], total_unidades: 0, skus: {}, obs_list: [] };
+          }
+          map[cli].registros.push(p);
+          const qtd = parseFloat(p.qtd || p.qtd_entrada || p.qtd_saida || 0);
+          map[cli].total_unidades += qtd;
+          const prod = p.produto || p.sku || 'Produto';
+          if (!map[cli].skus[prod]) map[cli].skus[prod] = { qtd: 0, sku: p.sku || '', ids: [], abas: [], refs: [] };
+          map[cli].skus[prod].qtd += qtd;
+          map[cli].skus[prod].ids.push(p.id || '');
+          map[cli].skus[prod].abas.push(p.qtd !== undefined && p.qtd_entrada === undefined ? 'retornaveis' : 'estoque');
+          map[cli].skus[prod].refs.push(p.ref || '');
+          const obs = (p.obs || '').trim();
+          if (obs) map[cli].obs_list.push({ produto: prod, obs: obs, por: p.registrado_por || '' });
+        });
+        return Object.values(map);
+      }
+
+      const gruposDist = agruparPorCliente(pendsDist);
+      const gruposPDV  = agruparPorCliente(pendsPDV);
+
+      [[elDist, gruposDist, pendsDist, badgeDist], [elPDV, gruposPDV, pendsPDV, badgePDV]].forEach(([el, grupos, pdsOrig, badge]) => {
         if (!el) return;
         if (badge) {
-          badge.textContent = pds.length;
-          badge.style.display = pds.length > 0 ? 'inline-flex' : 'none';
+          badge.textContent = pdsOrig.length;
+          badge.style.display = pdsOrig.length > 0 ? 'inline-flex' : 'none';
         }
-        if (!pds.length) {
+        if (!grupos.length) {
           el.innerHTML = '<div class="empty"><div class="empty-icon">&#10003;</div><div class="empty-txt">Sem pendencias</div></div>';
           return;
         }
         const lista = document.createElement('div');
         lista.className = 'pend-list';
-        pds.forEach(p => lista.appendChild(renderPend(p, papel)));
+        grupos.forEach(g => lista.appendChild(renderPendCliente(g, papel)));
         el.innerHTML = '';
         el.appendChild(lista);
       });
@@ -1953,6 +1979,155 @@ function renderPendMotorista(grupo) {
       div.style.opacity = '1';
       this.disabled = false;
       this.textContent = '✓ Confirmar Retorno';
+      toast('Erro: ' + e.message, 'err');
+    }
+  });
+
+  return div;
+}
+
+function renderPendCliente(grupo, papel) {
+  const div = document.createElement('div');
+  div.className = 'pend-card';
+  div.style.borderLeft = '4px solid var(--g)';
+
+  // Dados do grupo
+  const numProdutos = Object.keys(grupo.skus).length;
+  const dataMax = grupo.registros.reduce((m, r) => {
+    const d = r.data || '';
+    return d > m ? d : m;
+  }, '');
+  const porSet = new Set();
+  grupo.registros.forEach(r => { if (r.registrado_por) porSet.add(r.registrado_por); });
+  const registradoPor = [...porSet].join(', ');
+
+  // Determinar labels de tipo
+  const tiposSet = new Set();
+  grupo.registros.forEach(r => {
+    const isRet = r.qtd !== undefined && r.qtd_entrada === undefined;
+    const orig = String(r.origem_registro||'').toLowerCase();
+    if (!isRet) tiposSet.add('Entrada Estoque');
+    else if (orig === 'motorista') tiposSet.add('Retorno em Rota');
+    else if (orig === 'patio_distribuidor') tiposSet.add('Devolução no Pátio');
+    else tiposSet.add('Retorno Vasilhame');
+  });
+  const tipoLabel = [...tiposSet].join(' · ');
+
+  // Cabeçalho
+  let html = '';
+  html += '<div class="pend-head" style="background:var(--g2)">';
+  html += '  <div>';
+  html += '    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--g)">' + tipoLabel + '</div>';
+  html += '    <div class="pend-cliente" style="margin-top:4px;font-size:15px;font-weight:700">' + grupo.cliente + '</div>';
+  html += '    <div style="font-size:11px;color:var(--ink3)">' + (dataMax || '') + (registradoPor ? ' · por ' + registradoPor : '') + ' · ' + numProdutos + ' produto(s)</div>';
+  html += '  </div>';
+  html += '  <div style="text-align:right">';
+  html += '    <div style="font-size:20px;font-weight:700;color:var(--g)">' + grupo.total_unidades + '</div>';
+  html += '    <div style="font-size:10px;color:var(--ink3)">unidades</div>';
+  html += '  </div>';
+  html += '</div>';
+
+  // Tabela de produtos
+  html += '<div class="pend-body" style="padding:0">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+  html += '<thead><tr style="background:var(--bg);border-bottom:1px solid var(--bd)">';
+  html += '<th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:600;color:var(--ink3)">Produto</th>';
+  html += '<th style="padding:8px 10px;text-align:center;font-size:11px;font-weight:600;color:var(--ink3);width:55px">Qtd</th>';
+  html += '</tr></thead><tbody>';
+
+  Object.entries(grupo.skus).forEach(([prod, info]) => {
+    html += '<tr style="border-bottom:1px solid var(--bd)">';
+    html += '<td style="padding:8px 10px">';
+    html += '  <div style="font-weight:500;line-height:1.3">' + prod + '</div>';
+    if (info.sku && info.sku !== prod) {
+      html += '  <div style="font-size:10px;color:var(--ink4)">' + info.sku + '</div>';
+    }
+    html += '</td>';
+    html += '<td style="padding:8px 10px;text-align:center;font-weight:700;font-size:14px">' + info.qtd + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  html += '</div>';
+
+  // Observações (se houver)
+  if (grupo.obs_list.length > 0) {
+    html += '<div style="border-top:1px solid var(--bd);background:var(--a2);padding:10px 13px">';
+    html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--a);margin-bottom:6px">📝 Observações</div>';
+    grupo.obs_list.forEach(o => {
+      html += '<div style="font-size:12px;color:var(--ink2);margin-bottom:4px;line-height:1.4">';
+      html += '<span style="font-weight:600">' + o.produto + '</span>';
+      if (o.por) html += ' <span style="color:var(--ink4);font-size:10px">(' + o.por + ')</span>';
+      html += ': ' + o.obs;
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Rodapé com botões
+  html += '<div style="padding:10px 13px;border-top:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;gap:8px">';
+  html += '  <button class="pbtn pbtn-edit pend-btn-det-cli" style="font-size:12px;padding:7px 12px">&#128065; Detalhes</button>';
+  html += '  <button class="btn btn-primary pend-btn-ok-cli" style="width:auto;padding:9px 18px;font-size:13px">✓ Confirmar Tudo</button>';
+  html += '</div>';
+
+  // Detalhe individual oculto
+  html += '<div class="cli-detalhe" style="display:none;border-top:2px solid var(--g);background:var(--g2)">';
+  html += '<div style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:.5px">Registros Individuais</div>';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html += '<thead><tr style="background:rgba(15,110,86,.08);border-bottom:1px solid var(--bd)">';
+  html += '<th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--ink3)">Produto</th>';
+  html += '<th style="padding:6px 6px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:45px">Qtd</th>';
+  html += '<th style="padding:6px 6px;text-align:left;font-size:10px;font-weight:600;color:var(--ink3)">Tipo</th>';
+  html += '<th style="padding:6px 6px;text-align:left;font-size:10px;font-weight:600;color:var(--ink3)">ID</th>';
+  html += '</tr></thead><tbody>';
+
+  grupo.registros.forEach(r => {
+    const isRet = r.qtd !== undefined && r.qtd_entrada === undefined;
+    const qtd = parseFloat(r.qtd || r.qtd_entrada || r.qtd_saida || 0);
+    const prod = r.produto || r.sku || '—';
+    const tipo = r.tipo_mov || (isRet ? 'Retornável' : 'Estoque');
+    const idSlice = (r.id || '').slice(-6);
+    html += '<tr style="border-bottom:1px solid var(--bd)">';
+    html += '<td style="padding:6px 10px;font-size:12px">' + prod + '</td>';
+    html += '<td style="padding:6px 6px;text-align:center;font-weight:600">' + qtd + '</td>';
+    html += '<td style="padding:6px 6px;font-size:11px;color:var(--ink3)">' + tipo + '</td>';
+    html += '<td style="padding:6px 6px;font-family:\'DM Mono\',monospace;font-size:10px;color:var(--ink4)">' + idSlice + '</td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  html += '</div>';
+
+  div.innerHTML = html;
+
+  // Toggle detalhes
+  const detalheEl = div.querySelector('.cli-detalhe');
+  const btnDet = div.querySelector('.pend-btn-det-cli');
+  btnDet.addEventListener('click', function() {
+    const aberto = detalheEl.style.display !== 'none';
+    detalheEl.style.display = aberto ? 'none' : 'block';
+    btnDet.innerHTML = aberto ? '&#128065; Detalhes' : '&#128065; Ocultar';
+  });
+
+  // Confirmar todos os registros do cliente
+  div.querySelector('.pend-btn-ok-cli').addEventListener('click', async function() {
+    this.disabled = true;
+    this.textContent = '⌛ Confirmando...';
+    div.style.opacity = '.4';
+    try {
+      let confirmados = 0;
+      for (const r of grupo.registros) {
+        const isRet = r.qtd !== undefined && r.qtd_entrada === undefined;
+        const aba = isRet ? 'retornaveis' : 'estoque';
+        await api('validar_pendencia', { id: r.id, aba, status: 'validado', validado_por: NOME });
+        confirmados++;
+      }
+      div.remove();
+      toast('✓ ' + grupo.cliente + ' — ' + confirmados + ' registro(s) confirmados', 'ok');
+      setTimeout(() => carregarPendencias('comercial'), 500);
+    } catch(e) {
+      div.style.opacity = '1';
+      this.disabled = false;
+      this.textContent = '✓ Confirmar Tudo';
       toast('Erro: ' + e.message, 'err');
     }
   });
