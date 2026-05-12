@@ -185,6 +185,12 @@ textarea{resize:vertical;min-height:64px}
 .edit-inline label{font-size:11px}
 .edit-inline input,.edit-inline select{font-size:14px;padding:8px 10px}
 .edit-btns{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:4px}
+.consig-inline{display:none;border-top:2px solid var(--b);background:var(--b2);padding:12px 13px;flex-direction:column;gap:10px}
+.consig-inline.open{display:flex}
+.consig-inline .fg{margin:0}
+.consig-inline label{font-size:11px;font-weight:500;color:var(--ink2)}
+.consig-inline input{font-size:14px;padding:8px 10px}
+.consig-tag{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--b);background:var(--b2);border:1px solid var(--b);border-radius:4px;padding:2px 6px}
 </style>
 </head>
 <body>
@@ -461,16 +467,13 @@ if (document.readyState === 'loading') {
 ════════════════════════════════════════════════════ -->
 <div class="screen" id="sc-comercial">
   <div class="main">
-    <!-- Abas internas: Distribuidores | PDV | Consignados -->
+    <!-- Abas internas: Distribuidores | PDV -->
     <div class="inner-tabs">
       <div class="inner-tab active" id="com-tab-dist" onclick="comercialAba('dist')">
         Distribuidores <span class="tab-badge" id="com-badge-dist" style="display:none">0</span>
       </div>
       <div class="inner-tab" id="com-tab-pdv" onclick="comercialAba('pdv')">
         PDV <span class="tab-badge" id="com-badge-pdv" style="display:none">0</span>
-      </div>
-      <div class="inner-tab" id="com-tab-consig" onclick="comercialAba('consig')">
-        Consignados
       </div>
     </div>
 
@@ -493,31 +496,6 @@ if (document.readyState === 'loading') {
         <div id="pend-comercial-pdv"></div>
       </div>
 
-      <!-- Painel Consignados -->
-      <div class="inner-panel" id="com-panel-consig">
-        <div class="slabel">Devolução de Consignado</div>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <!-- Busca por pedido -->
-          <div class="fg">
-            <label>Nº do Pedido</label>
-            <div style="display:flex;gap:6px">
-              <input id="consig-pedido" type="text" placeholder="Ex: 12345" style="flex:1">
-              <button class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="buscarConsignado('pedido')">Buscar</button>
-            </div>
-          </div>
-          <!-- Busca por cliente -->
-          <div class="fg">
-            <label>Ou buscar por Cliente</label>
-            <div class="ac-wrap">
-              <input id="consig-cliente" type="text" placeholder="Nome do cliente..." autocomplete="off">
-              <div class="ac-list" id="consig-cliente-ac"></div>
-            </div>
-            <button class="btn" style="margin-top:4px;padding:8px 14px;font-size:13px;background:var(--bg);border:1.5px solid var(--bd);color:var(--ink2);border-radius:var(--rad3);cursor:pointer" onclick="buscarConsignado('cliente')">Buscar pedidos do cliente</button>
-          </div>
-        </div>
-        <!-- Resultado da busca -->
-        <div id="consig-resultado" style="margin-top:8px"></div>
-      </div>
     </div>
   </div>
 </div>
@@ -762,11 +740,8 @@ function _ativarPapel(papel, nome) {
 function comercialAba(aba) {
   document.getElementById('com-tab-dist').classList.toggle('active', aba === 'dist');
   document.getElementById('com-tab-pdv').classList.toggle('active', aba === 'pdv');
-  document.getElementById('com-tab-consig').classList.toggle('active', aba === 'consig');
   document.getElementById('com-panel-dist').classList.toggle('active', aba === 'dist');
   document.getElementById('com-panel-pdv').classList.toggle('active', aba === 'pdv');
-  document.getElementById('com-panel-consig').classList.toggle('active', aba === 'consig');
-  if (aba === 'consig') initConsignadoAC();
 }
 
 function patioAba(aba) {
@@ -1829,7 +1804,7 @@ async function carregarPendencias(papel) {
         const sku  = String(m.sku||'').toUpperCase();
         const tipo = String(m.tipo_mov||'').toLowerCase();
         if (sku.indexOf('BARRIL-') === 0) return false;
-        return tipo.includes('entrada compra') || tipo.includes('entrada f') || tipo.includes('devoluc');
+        return tipo.includes('entrada compra') || tipo.includes('entrada f') || tipo.includes('devoluc') || tipo.includes('ajuste +') || tipo.includes('ajuste pos');
       });
       pends = [...retCom, ...estCom];
 
@@ -2065,6 +2040,15 @@ function renderPendCliente(grupo, papel) {
     if (r.id && typeof PEND_CACHE !== 'undefined') PEND_CACHE.set(r.id, r);
   });
 
+  // Detectar produtos consignados devolvidos (Estoque com tipo_mov "Ajuste +")
+  const produtosConsig = grupo.registros.filter(r => {
+    const isEst = r.qtd_entrada !== undefined;
+    const tipo = String(r.tipo_mov || '').toLowerCase();
+    return isEst && (tipo.indexOf('ajuste +') >= 0 || tipo.indexOf('ajuste pos') >= 0 || tipo.indexOf('entrada devolu') >= 0);
+  });
+  const temConsignado = produtosConsig.length > 0;
+  const cid = 'consig-' + (grupo.registros[0]?.id || Math.random().toString(36).slice(2,8));
+
   // Dados do grupo
   const numProdutos = Object.keys(grupo.skus).length;
   const dataMax = grupo.registros.reduce((m, r) => {
@@ -2091,7 +2075,10 @@ function renderPendCliente(grupo, papel) {
   let html = '';
   html += '<div class="pend-head" style="background:var(--g2)">';
   html += '  <div>';
-  html += '    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--g)">' + tipoLabel + '</div>';
+  html += '    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
+  html += '      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--g)">' + tipoLabel + '</span>';
+  if (temConsignado) html += '      <span class="consig-tag">📦 Consignado</span>';
+  html += '    </div>';
   html += '    <div class="pend-cliente" style="margin-top:4px;font-size:15px;font-weight:700">' + grupo.cliente + '</div>';
   html += '    <div style="font-size:11px;color:var(--ink3)">' + (dataMax || '') + (registradoPor ? ' · por ' + registradoPor : '') + ' · ' + numProdutos + ' produto(s)</div>';
   html += '  </div>';
@@ -2134,6 +2121,33 @@ function renderPendCliente(grupo, papel) {
       html += ': ' + o.obs;
       html += '</div>';
     });
+    html += '</div>';
+  }
+
+  // Se tem consignado: seção para processar devolução
+  if (temConsignado) {
+    html += '<div style="border-top:1px solid var(--bd);background:var(--b2);padding:10px 13px">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
+    html += '  <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--b)">📦 Produto(s) consignado(s) devolvido(s)</span>';
+    html += '</div>';
+    produtosConsig.forEach(r => {
+      html += '<div style="font-size:12px;color:var(--ink2);margin-bottom:2px">• ' + (r.produto || r.sku) + ' — ' + (r.qtd_entrada || r.qtd || 0) + ' un</div>';
+    });
+    html += '<button class="pbtn pbtn-edit consig-btn-abrir" style="margin-top:8px;font-size:12px;padding:7px 14px;background:var(--b2);color:var(--b);border:1.5px solid var(--b);font-weight:600">🔍 Buscar pedido original para ajustar venda</button>';
+    html += '</div>';
+
+    // Painel inline para buscar pedido e confirmar devolução (oculto)
+    html += '<div class="consig-inline" id="' + cid + '">';
+    html += '  <div style="font-size:11px;font-weight:700;color:var(--b);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Ajuste de Venda — Devolução</div>';
+    html += '  <div class="fg"><label>Nº do Pedido Original</label>';
+    html += '    <div style="display:flex;gap:6px"><input type="text" id="' + cid + '-ped" placeholder="Ex: 12345" style="flex:1">';
+    html += '    <button class="btn btn-primary ' + cid + '-btn-buscar" style="width:auto;padding:8px 14px;font-size:12px">Buscar</button></div>';
+    html += '  </div>';
+    html += '  <div class="fg"><label>Ou buscar por cliente</label>';
+    html += '    <div class="ac-wrap"><input type="text" id="' + cid + '-cli" placeholder="Nome do cliente..." autocomplete="off"></div>';
+    html += '    <button class="btn ' + cid + '-btn-buscar-cli" style="margin-top:4px;padding:6px 12px;font-size:12px;background:var(--bg);border:1.5px solid var(--bd);color:var(--ink2);border-radius:var(--rad3);cursor:pointer">Buscar pedidos do cliente</button>';
+    html += '  </div>';
+    html += '  <div id="' + cid + '-result"></div>';
     html += '</div>';
   }
 
@@ -2195,6 +2209,48 @@ function renderPendCliente(grupo, papel) {
       }
     });
   });
+
+  // Consignado inline: abrir painel, iniciar autocomplete, buscar pedido
+  if (temConsignado) {
+    const consigPanel = document.getElementById(cid);
+    div.querySelector('.consig-btn-abrir').addEventListener('click', function() {
+      const aberto = consigPanel.classList.contains('open');
+      consigPanel.classList.toggle('open');
+      this.textContent = aberto ? '🔍 Buscar pedido original para ajustar venda' : '✕ Fechar busca';
+      if (!aberto) {
+        // Inicializar autocomplete do cliente no painel inline
+        const cliInp = document.getElementById(cid + '-cli');
+        if (cliInp && !cliInp._ac) {
+          criarAC(cliInp, function(q) {
+            return CLIENTES.filter(c => _buscaSemelhanca(c.nome, q) > 0.3)
+              .sort((a,b) => _buscaSemelhanca(b.nome, q) - _buscaSemelhanca(a.nome, q))
+              .slice(0, 8)
+              .map(c => ({ label: c.nome, value: c.id, meta: c.tipo || '' }));
+          }, function(sel) {
+            cliInp.value = sel.label;
+            cliInp._id = sel.value;
+          }, 'Buscar cliente...');
+          cliInp._ac = true;
+        }
+        // Pre-fill com o cliente do grupo
+        if (cliInp && !cliInp.value) cliInp.value = grupo.cliente;
+      }
+    });
+
+    // Buscar por pedido
+    div.querySelector('.' + cid + '-btn-buscar').addEventListener('click', function() {
+      const ped = document.getElementById(cid + '-ped')?.value?.trim();
+      if (!ped) { toast('Informe o nº do pedido', 'err'); return; }
+      _buscarConsigInline(cid, { pedido: ped }, grupo, produtosConsig);
+    });
+
+    // Buscar por cliente
+    div.querySelector('.' + cid + '-btn-buscar-cli').addEventListener('click', function() {
+      const cli = document.getElementById(cid + '-cli')?.value?.trim();
+      if (!cli) { toast('Informe o cliente', 'err'); return; }
+      _buscarConsigInline(cid, { cliente: cli }, grupo, produtosConsig);
+    });
+  }
 
   // Confirmar todos os registros do cliente
   div.querySelector('.pend-btn-ok-cli').addEventListener('click', async function() {
@@ -2435,7 +2491,9 @@ function renderMeuLancamento(p) {
 
   const isRet = p._aba === 'retornaveis';
   const cliente = p.origem || p.cliente || p.fornecedor || '—';
-  const produto = p.produto || p.sku || '—';
+  const produto = p.produto || '—';
+  const sku = p.sku || '';
+  const tipoRet = p.tipo_retornavel || '';
   const qtd = p.qtd || p.qtd_entrada || 0;
   const data = p.data || '';
   const tipo = p._tipo_display || (isRet ? 'Retorno' : 'Estoque');
@@ -2450,6 +2508,8 @@ function renderMeuLancamento(p) {
   html += '</div>';
   html += '<div class="pend-body">';
   html += '  <div style="font-size:14px;font-weight:600;margin-bottom:2px">' + produto + '</div>';
+  if (sku && sku !== produto) html += '  <div style="font-size:11px;color:var(--ink4);margin-bottom:2px">SKU: ' + sku + '</div>';
+  if (tipoRet) html += '  <div style="font-size:11px;color:var(--ink3);margin-bottom:2px">Tipo: ' + tipoRet + '</div>';
   html += '  <div style="font-size:13px;color:var(--b);font-weight:700;margin-bottom:5px">Quantidade: ' + qtd + ' un</div>';
   if (p.obs) html += '  <div style="font-size:11px;color:var(--ink3);margin-bottom:5px">Obs: ' + p.obs + '</div>';
   html += '  <div class="pend-btns">';
@@ -2458,14 +2518,12 @@ function renderMeuLancamento(p) {
   html += '  </div>';
   html += '</div>';
 
-  // Área de edição inline (oculta)
+  // Área de edição inline (oculta) — SEM ac-list no HTML, criarAC cria automaticamente
   html += '<div class="edit-inline" id="edit-' + p.id + '">';
   html += '  <div class="fg"><label>Cliente / Origem</label>';
-  html += '    <div class="ac-wrap"><input id="ml-cli-' + p.id + '" type="text" value="' + (cliente !== '—' ? cliente : '') + '" autocomplete="off">';
-  html += '    <div class="ac-list" id="ml-cli-ac-' + p.id + '"></div></div></div>';
+  html += '    <div class="ac-wrap"><input id="ml-cli-' + p.id + '" type="text" value="' + (cliente !== '—' ? cliente : '') + '" autocomplete="off"></div></div>';
   html += '  <div class="fg"><label>Produto</label>';
-  html += '    <div class="ac-wrap"><input id="ml-prod-' + p.id + '" type="text" value="' + (produto !== '—' ? produto : '') + '" autocomplete="off">';
-  html += '    <div class="ac-list" id="ml-prod-ac-' + p.id + '"></div></div></div>';
+  html += '    <div class="ac-wrap"><input id="ml-prod-' + p.id + '" type="text" value="' + (produto !== '—' ? produto : '') + '" autocomplete="off"></div></div>';
   html += '  <div class="fg"><label>Quantidade</label>';
   html += '    <input id="ml-qtd-' + p.id + '" type="number" value="' + qtd + '" min="1" step="1"></div>';
   html += '  <div class="edit-btns">';
@@ -2476,25 +2534,40 @@ function renderMeuLancamento(p) {
 
   div.innerHTML = html;
 
-  // Bind eventos
+  // Bind editar — abre inline e inicializa autocompletes corretamente
   div.querySelector('.ml-btn-edit').addEventListener('click', function () {
     const editDiv = document.getElementById('edit-' + p.id);
     editDiv.classList.toggle('open');
-    // Inicializar autocompletes
+    // Inicializar autocompletes como FUNÇÃO de busca (não array)
     const cliInput = document.getElementById('ml-cli-' + p.id);
     const prodInput = document.getElementById('ml-prod-' + p.id);
     if (cliInput && !cliInput._ac) {
-      criarAC(cliInput, CLIENTES.map(c => ({ nome: c.nome, id: c.id, meta: c.tipo || '' })),
-        function (sel) { cliInput.value = sel.nome; cliInput._id = sel.id; });
+      criarAC(cliInput, function(q) {
+        return CLIENTES.filter(c => _buscaSemelhanca(c.nome, q) > 0.3)
+          .sort((a,b) => _buscaSemelhanca(b.nome, q) - _buscaSemelhanca(a.nome, q))
+          .slice(0, 8)
+          .map(c => ({ label: c.nome, value: c.id, meta: c.tipo || '' }));
+      }, function(sel) {
+        cliInput.value = sel.label;
+        cliInput._id = sel.value;
+      }, 'Buscar cliente...');
       cliInput._ac = true;
     }
     if (prodInput && !prodInput._ac) {
-      criarAC(prodInput, PRODUTOS.map(pr => ({ nome: pr.produto || pr.sku, id: pr.sku, meta: pr.categoria || '' })),
-        function (sel) { prodInput.value = sel.nome; prodInput._sku = sel.id; });
+      criarAC(prodInput, function(q) {
+        return PRODUTOS.filter(pr => _buscaSemelhanca(pr.produto || pr.sku, q) > 0.3 || (pr.sku||'').toLowerCase().indexOf(q.toLowerCase()) >= 0)
+          .sort((a,b) => _buscaSemelhanca(b.produto || b.sku, q) - _buscaSemelhanca(a.produto || a.sku, q))
+          .slice(0, 8)
+          .map(pr => ({ label: pr.produto || pr.sku, value: pr.sku, meta: pr.categoria || '' }));
+      }, function(sel) {
+        prodInput.value = sel.label;
+        prodInput._sku = sel.value;
+      }, 'Buscar produto...');
       prodInput._ac = true;
     }
   });
 
+  // Bind excluir
   div.querySelector('.ml-btn-del').addEventListener('click', async function () {
     if (!confirm('Excluir este lançamento?')) return;
     this.disabled = true;
@@ -2518,15 +2591,16 @@ function renderMeuLancamento(p) {
     var saveBtn = document.getElementById('ml-save-' + p.id);
     if (saveBtn) saveBtn.addEventListener('click', async function () {
       const campos = {};
-      const novoCli = document.getElementById('ml-cli-' + p.id)?.value?.trim();
-      const novoProd = document.getElementById('ml-prod-' + p.id)?.value?.trim();
-      const novoProdSku = document.getElementById('ml-prod-' + p.id)?._sku;
+      const cliInput = document.getElementById('ml-cli-' + p.id);
+      const prodInput = document.getElementById('ml-prod-' + p.id);
+      const novoCli = cliInput?.value?.trim();
+      const novoProd = prodInput?.value?.trim();
+      const novoProdSku = prodInput?._sku || '';
       const novaQtd = parseFloat(document.getElementById('ml-qtd-' + p.id)?.value) || 0;
 
       if (novoCli && novoCli !== cliente) {
         campos.origem = novoCli;
-        const cliId = document.getElementById('ml-cli-' + p.id)?._id;
-        if (cliId) campos.origem_id = cliId;
+        if (cliInput._id) campos.origem_id = cliInput._id;
       }
       if (novoProd && novoProd !== produto) {
         campos.produto = novoProd;
@@ -2587,11 +2661,9 @@ function abrirCorrecao(id, aba, dadosAtuais) {
     '  </div>' +
     '  <div class="modal-body">' +
     '    <div class="fg"><label>Cliente / Origem</label>' +
-    '      <div class="ac-wrap"><input id="corr-cliente" type="text" value="' + cliente + '" autocomplete="off">' +
-    '      <div class="ac-list" id="corr-cliente-ac"></div></div></div>' +
+    '      <div class="ac-wrap"><input id="corr-cliente" type="text" value="' + cliente + '" autocomplete="off"></div></div>' +
     '    <div class="fg"><label>Produto</label>' +
-    '      <div class="ac-wrap"><input id="corr-produto" type="text" value="' + produto + '" autocomplete="off">' +
-    '      <div class="ac-list" id="corr-produto-ac"></div></div></div>' +
+    '      <div class="ac-wrap"><input id="corr-produto" type="text" value="' + produto + '" autocomplete="off"></div></div>' +
     '    <div class="fg"><label>Quantidade</label>' +
     '      <input id="corr-qtd" type="number" value="' + qtd + '" min="0" step="1"></div>' +
     '    <div class="fg"><label>Motivo da correção</label>' +
@@ -2608,13 +2680,21 @@ function abrirCorrecao(id, aba, dadosAtuais) {
   // Fechar clicando fora
   overlay.addEventListener('click', function (e) { if (e.target === overlay) fecharCorrecao(); });
 
-  // Autocompletes
+  // Autocompletes (função de busca, não array estático)
   const cliInput = document.getElementById('corr-cliente');
   const prodInput = document.getElementById('corr-produto');
-  criarAC(cliInput, CLIENTES.map(c => ({ nome: c.nome, id: c.id, meta: c.tipo || '' })),
-    function (sel) { cliInput.value = sel.nome; cliInput._id = sel.id; });
-  criarAC(prodInput, PRODUTOS.map(pr => ({ nome: pr.produto || pr.sku, id: pr.sku, meta: pr.categoria || '' })),
-    function (sel) { prodInput.value = sel.nome; prodInput._sku = sel.id; });
+  criarAC(cliInput, function(q) {
+    return CLIENTES.filter(c => _buscaSemelhanca(c.nome, q) > 0.3)
+      .sort((a,b) => _buscaSemelhanca(b.nome, q) - _buscaSemelhanca(a.nome, q))
+      .slice(0, 8)
+      .map(c => ({ label: c.nome, value: c.id, meta: c.tipo || '' }));
+  }, function (sel) { cliInput.value = sel.label; cliInput._id = sel.value; }, 'Buscar cliente...');
+  criarAC(prodInput, function(q) {
+    return PRODUTOS.filter(pr => _buscaSemelhanca(pr.produto || pr.sku, q) > 0.3 || (pr.sku||'').toLowerCase().indexOf(q.toLowerCase()) >= 0)
+      .sort((a,b) => _buscaSemelhanca(b.produto || b.sku, q) - _buscaSemelhanca(a.produto || a.sku, q))
+      .slice(0, 8)
+      .map(pr => ({ label: pr.produto || pr.sku, value: pr.sku, meta: pr.categoria || '' }));
+  }, function (sel) { prodInput.value = sel.label; prodInput._sku = sel.value; }, 'Buscar produto...');
 
   // Bind salvar
   document.getElementById('corr-btn-salvar').addEventListener('click', function () {
@@ -2676,33 +2756,12 @@ async function submitCorrecao(id, aba) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// v2: COMERCIAL — Devolução Consignada
+// v2: COMERCIAL — Devolução Consignada (inline no card)
 // ══════════════════════════════════════════════════════════════
 
-function initConsignadoAC() {
-  const cliInput = document.getElementById('consig-cliente');
-  if (cliInput && !cliInput._ac && CLIENTES.length) {
-    criarAC(cliInput, CLIENTES.map(c => ({ nome: c.nome, id: c.id, meta: c.tipo || '' })),
-      function (sel) { cliInput.value = sel.nome; cliInput._id = sel.id; });
-    cliInput._ac = true;
-  }
-}
-
-async function buscarConsignado(modo) {
-  const el = document.getElementById('consig-resultado');
+async function _buscarConsigInline(cid, params, grupo, produtosConsig) {
+  const el = document.getElementById(cid + '-result');
   if (!el) return;
-
-  let params = {};
-  if (modo === 'pedido') {
-    const ped = document.getElementById('consig-pedido')?.value?.trim();
-    if (!ped) { toast('Informe o número do pedido', 'err'); return; }
-    params.pedido = ped;
-  } else {
-    const cli = document.getElementById('consig-cliente')?.value?.trim();
-    if (!cli) { toast('Informe o cliente', 'err'); return; }
-    params.cliente = cli;
-  }
-
   el.innerHTML = '<div class="empty"><div class="empty-icon">&#8987;</div><div class="empty-txt">Buscando...</div></div>';
 
   try {
@@ -2711,119 +2770,124 @@ async function buscarConsignado(modo) {
 
     // Se veio lista de pedidos (busca por cliente)
     if (dados.pedidos && dados.pedidos.length > 0 && (!dados.itens || !dados.itens.length)) {
-      renderPedidosCliente(dados.pedidos, el);
+      _renderPedidosInline(cid, dados.pedidos, grupo, produtosConsig);
       return;
     }
 
     // Se veio itens do pedido
     if (dados.itens && dados.itens.length > 0) {
-      renderDetalhesPedido(dados, el);
+      _renderDetalhesInline(cid, dados, grupo, produtosConsig);
       return;
     }
 
-    el.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-txt">Nenhum pedido encontrado</div></div>';
+    el.innerHTML = '<div class="empty" style="padding:10px 0"><div class="empty-icon">🔍</div><div class="empty-txt">Nenhum pedido encontrado</div></div>';
   } catch (e) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">!</div><div class="empty-txt">Erro: ' + e.message + '</div></div>';
+    el.innerHTML = '<div class="empty" style="padding:10px 0"><div class="empty-icon">!</div><div class="empty-txt">Erro: ' + e.message + '</div></div>';
   }
 }
 
-function renderPedidosCliente(pedidos, el) {
-  let html = '<div class="slabel" style="margin-top:8px">Pedidos encontrados</div>';
-  html += '<div class="pend-list">';
+function _renderPedidosInline(cid, pedidos, grupo, produtosConsig) {
+  const el = document.getElementById(cid + '-result');
+  let html = '<div style="font-size:10px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px">Pedidos encontrados</div>';
   pedidos.forEach(function (ped) {
-    html += '<div class="acard consig-ped-card" data-pedido="' + ped.pedido + '" style="cursor:pointer">';
-    html += '  <div class="acard-icon ic-green">📋</div>';
+    html += '<div class="acard consig-ped-pick" data-pedido="' + ped.pedido + '" style="cursor:pointer;padding:10px;margin-bottom:4px">';
+    html += '  <div class="acard-icon ic-green" style="width:32px;height:32px;font-size:14px">📋</div>';
     html += '  <div class="acard-body">';
-    html += '    <div class="acard-title">Pedido #' + ped.pedido + '</div>';
+    html += '    <div class="acard-title" style="font-size:13px">Pedido #' + ped.pedido + '</div>';
     html += '    <div class="acard-sub">' + ped.cliente + ' · ' + ped.data + ' · ' + ped.itens_count + ' item(ns)</div>';
     html += '  </div>';
     html += '  <div class="acard-right">›</div>';
     html += '</div>';
   });
-  html += '</div>';
   el.innerHTML = html;
 
-  // Bind clicks
-  el.querySelectorAll('.consig-ped-card').forEach(function (card) {
+  // Bind clicks — ao clicar num pedido, buscar detalhes
+  el.querySelectorAll('.consig-ped-pick').forEach(function (card) {
     card.addEventListener('click', function () {
-      document.getElementById('consig-pedido').value = card.dataset.pedido;
-      buscarConsignado('pedido');
+      const pedInput = document.getElementById(cid + '-ped');
+      if (pedInput) pedInput.value = card.dataset.pedido;
+      _buscarConsigInline(cid, { pedido: card.dataset.pedido }, grupo, produtosConsig);
     });
   });
 }
 
-function renderDetalhesPedido(dados, el) {
+function _renderDetalhesInline(cid, dados, grupo, produtosConsig) {
+  const el = document.getElementById(cid + '-result');
   const itens = dados.itens || [];
   if (!itens.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-txt">Sem itens no pedido</div></div>';
+    el.innerHTML = '<div class="empty" style="padding:10px 0"><div class="empty-icon">🔍</div><div class="empty-txt">Sem itens no pedido</div></div>';
     return;
   }
 
   const primeiro = itens[0];
   let html = '';
-  html += '<div class="pend-card" style="border-left:4px solid var(--g)">';
+  html += '<div style="margin-top:8px;border:1.5px solid var(--b);border-radius:var(--rad2);overflow:hidden">';
 
-  // Header do pedido
-  html += '<div class="pend-head" style="background:var(--g2)">';
-  html += '  <div>';
-  html += '    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--g)">Devolução Consignado</div>';
-  html += '    <div class="pend-cliente" style="margin-top:4px;font-size:15px;font-weight:700">' + primeiro.cliente + '</div>';
-  html += '    <div style="font-size:11px;color:var(--ink3)">Pedido #' + primeiro.pedido + ' · ' + primeiro.data + ' · ' + (primeiro.empresa || '') + '</div>';
-  html += '  </div>';
+  // Header compacto
+  html += '<div style="background:var(--b2);padding:8px 10px;border-bottom:1px solid var(--bd)">';
+  html += '  <div style="font-size:13px;font-weight:700;color:var(--b)">Pedido #' + primeiro.pedido + '</div>';
+  html += '  <div style="font-size:11px;color:var(--ink3)">' + primeiro.cliente + ' · ' + primeiro.data + ' · ' + (primeiro.empresa || '') + '</div>';
   html += '</div>';
 
   // Tabela de itens
-  html += '<div class="pend-body" style="padding:0">';
   html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
   html += '<thead><tr style="background:var(--bg);border-bottom:1px solid var(--bd)">';
-  html += '<th style="padding:8px 6px;text-align:left;font-size:10px;font-weight:600;color:var(--ink3)">Produto</th>';
-  html += '<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:40px">Orig</th>';
-  html += '<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:40px">Dev.</th>';
-  html += '<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:40px">Disp</th>';
-  html += '<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:60px">Devolver</th>';
+  html += '<th style="padding:6px;text-align:left;font-size:10px;font-weight:600;color:var(--ink3)">Produto</th>';
+  html += '<th style="padding:6px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:35px">Orig</th>';
+  html += '<th style="padding:6px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:35px">Dev.</th>';
+  html += '<th style="padding:6px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:35px">Disp</th>';
+  html += '<th style="padding:6px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:55px">Devolver</th>';
   html += '</tr></thead><tbody>';
 
   itens.forEach(function (item, idx) {
     const disp = item.qtd_disponivel || 0;
+    // Tentar pre-preencher com a qtd do produto consignado devolvido
+    let preQtd = 0;
+    produtosConsig.forEach(pc => {
+      if ((pc.sku || '') === (item.sku || '') || (pc.produto || '') === (item.produto || '')) {
+        preQtd = Math.min(parseFloat(pc.qtd_entrada || pc.qtd || 0), disp);
+      }
+    });
+
     html += '<tr style="border-bottom:1px solid var(--bd)">';
-    html += '<td style="padding:6px 6px">';
-    html += '  <div style="font-weight:500;font-size:12px;line-height:1.3">' + item.produto + '</div>';
-    html += '  <div style="font-size:10px;color:var(--ink4)">' + item.sku + '</div>';
+    html += '<td style="padding:5px 6px">';
+    html += '  <div style="font-weight:500;font-size:11px;line-height:1.3">' + item.produto + '</div>';
+    html += '  <div style="font-size:9px;color:var(--ink4)">' + item.sku + '</div>';
     html += '</td>';
-    html += '<td style="padding:6px 4px;text-align:center;font-weight:600">' + item.qtd + '</td>';
-    html += '<td style="padding:6px 4px;text-align:center;color:var(--a);font-weight:600">' + (item.qtd_ja_devolvida || 0) + '</td>';
-    html += '<td style="padding:6px 4px;text-align:center;color:var(--g);font-weight:700">' + disp + '</td>';
-    html += '<td style="padding:6px 4px;text-align:center">';
+    html += '<td style="padding:5px 4px;text-align:center;font-weight:600;font-size:12px">' + item.qtd + '</td>';
+    html += '<td style="padding:5px 4px;text-align:center;color:var(--a);font-weight:600;font-size:12px">' + (item.qtd_ja_devolvida || 0) + '</td>';
+    html += '<td style="padding:5px 4px;text-align:center;color:var(--g);font-weight:700;font-size:12px">' + disp + '</td>';
+    html += '<td style="padding:5px 4px;text-align:center">';
     if (disp > 0) {
-      html += '<input type="number" id="consig-qtd-' + idx + '" class="consig-qtd-input" min="0" max="' + disp + '" value="0" ';
-      html += 'style="width:50px;text-align:center;padding:4px;font-size:13px;font-weight:700;border:1.5px solid var(--bd);border-radius:6px">';
+      html += '<input type="number" id="' + cid + '-qty-' + idx + '" min="0" max="' + disp + '" value="' + preQtd + '" ';
+      html += 'style="width:45px;text-align:center;padding:3px;font-size:12px;font-weight:700;border:1.5px solid var(--bd);border-radius:6px">';
     } else {
       html += '<span style="color:var(--ink4);font-size:11px">—</span>';
     }
     html += '</td>';
     html += '</tr>';
   });
+  html += '</tbody></table>';
 
-  html += '</tbody></table></div>';
-
-  // Botão confirmar
-  html += '<div style="padding:12px 13px;border-top:1px solid var(--bd)">';
-  html += '  <button class="btn btn-primary" id="consig-btn-confirmar" style="width:100%;font-size:14px;padding:12px">✓ Confirmar Devolução</button>';
+  // Botão confirmar devolução + validar registros
+  html += '<div style="padding:10px;border-top:1px solid var(--bd);display:flex;flex-direction:column;gap:6px">';
+  html += '  <button class="btn btn-primary" id="' + cid + '-btn-confirm" style="width:100%;font-size:13px;padding:10px">✓ Confirmar Devolução e Validar</button>';
+  html += '  <div style="font-size:10px;color:var(--ink3);text-align:center">Isso ajustará a venda + validará os registros pendentes</div>';
   html += '</div>';
 
   html += '</div>';
   el.innerHTML = html;
 
-  // Bind botão confirmar
-  document.getElementById('consig-btn-confirmar').addEventListener('click', function () {
-    submitDevolucaoConsignado(itens);
+  // Bind confirmar
+  document.getElementById(cid + '-btn-confirm').addEventListener('click', function () {
+    _submitConsigInline(cid, itens, grupo, produtosConsig, this);
   });
 }
 
-async function submitDevolucaoConsignado(itens) {
+async function _submitConsigInline(cid, itens, grupo, produtosConsig, btn) {
   const itensDevolver = [];
   itens.forEach(function (item, idx) {
-    const input = document.getElementById('consig-qtd-' + idx);
+    const input = document.getElementById(cid + '-qty-' + idx);
     const qtd = input ? parseFloat(input.value) || 0 : 0;
     if (qtd > 0) {
       if (qtd > (item.qtd_disponivel || 0)) {
@@ -2843,10 +2907,10 @@ async function submitDevolucaoConsignado(itens) {
   if (!itensDevolver.length) { toast('Selecione ao menos 1 item para devolver', 'err'); return; }
 
   const primeiro = itens[0];
-  const btn = document.getElementById('consig-btn-confirmar');
-  if (btn) { btn.disabled = true; btn.textContent = '⌛ Processando...'; }
+  if (btn) { btn.disabled = true; btn.textContent = '⌛ Processando devolução...'; }
 
   try {
+    // 1. Registrar devolução (ajuste negativo em Vendas + entrada no Estoque)
     const r = await api('devolucao_consignado', {
       pedido: primeiro.pedido,
       cliente: primeiro.cliente,
@@ -2856,23 +2920,42 @@ async function submitDevolucaoConsignado(itens) {
       registrado_por: NOME,
     });
 
-    const msg = r.dados?.msg || 'Devolução processada';
-    const el = document.getElementById('consig-resultado');
-    if (el) {
-      el.innerHTML =
-        '<div class="pend-card" style="border-left:4px solid var(--g);background:var(--g2)">' +
-        '<div class="pend-body" style="text-align:center;padding:20px">' +
-        '<div style="font-size:24px;margin-bottom:8px">✓</div>' +
-        '<div style="font-size:15px;font-weight:700;color:var(--g);margin-bottom:4px">' + msg + '</div>' +
-        '<div style="font-size:12px;color:var(--ink3)">Pedido #' + primeiro.pedido + '</div>' +
-        '</div></div>';
+    if (btn) btn.textContent = '⌛ Validando registros...';
+
+    // 2. Validar todos os registros pendentes do grupo (barris + produtos)
+    let confirmados = 0;
+    for (const reg of grupo.registros) {
+      const isRet = reg.qtd !== undefined && reg.qtd_entrada === undefined;
+      const aba = isRet ? 'retornaveis' : 'estoque';
+      try {
+        await api('validar_pendencia', { id: reg.id, aba, status: 'validado', validado_por: NOME });
+        confirmados++;
+      } catch (e2) {
+        console.warn('Erro validando ' + reg.id + ':', e2);
+      }
+    }
+
+    const msg = (r.dados?.msg || 'Devolução processada') + ' + ' + confirmados + ' registro(s) validado(s)';
+    const resultEl = document.getElementById(cid + '-result');
+    if (resultEl) {
+      resultEl.innerHTML =
+        '<div style="text-align:center;padding:12px 0">' +
+        '<div style="font-size:24px;margin-bottom:6px">✓</div>' +
+        '<div style="font-size:13px;font-weight:700;color:var(--g);margin-bottom:2px">' + msg + '</div>' +
+        '<div style="font-size:11px;color:var(--ink3)">Pedido #' + primeiro.pedido + '</div>' +
+        '</div>';
     }
     toast('✓ ' + msg, 'ok');
-    // Limpar campos
-    var pedInput = document.getElementById('consig-pedido');
-    if (pedInput) pedInput.value = '';
+
+    // Remover o card inteiro após 1.5s
+    setTimeout(function () {
+      const card = document.getElementById(cid)?.closest('.pend-card');
+      if (card) card.remove();
+      carregarPendencias('comercial');
+    }, 1500);
+
   } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar Devolução'; }
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar Devolução e Validar'; }
     toast('Erro: ' + e.message, 'err');
   }
 }
