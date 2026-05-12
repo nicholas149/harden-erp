@@ -127,6 +127,13 @@ textarea{resize:vertical;min-height:64px}
 .carreg-tick{display:inline-block;width:22px;height:22px;border:2px solid var(--bd);border-radius:6px;background:var(--bg);transition:all .15s;position:relative}
 .carreg-chk:checked+.carreg-tick{background:var(--g);border-color:var(--g)}
 .carreg-chk:checked+.carreg-tick::after{content:'✓';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:14px;font-weight:700;line-height:1}
+/* ── Checkbox troca (mesmo visual do carregamento) ────── */
+.troca-tick{display:inline-block;width:20px;height:20px;border:2px solid var(--bd);border-radius:6px;background:var(--bg);transition:all .15s;position:relative;flex-shrink:0}
+.troca-chk:checked+.troca-tick{background:var(--a);border-color:var(--a)}
+.troca-chk:checked+.troca-tick::after{content:'✓';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:12px;font-weight:700;line-height:1}
+.troca-row{display:flex;align-items:center;gap:6px;padding:2px 0 4px 2px}
+.troca-label{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.82rem;color:var(--g);font-weight:500}
+.troca-chk:checked~.troca-lbl-txt{color:var(--a)!important;font-weight:600}
 /* ── Pendências ───────────────────────────────────────── */
 .pend-list{display:flex;flex-direction:column;gap:8px}
 .pend-card{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rad);overflow:hidden;box-shadow:var(--sh)}
@@ -1423,12 +1430,13 @@ function addItem(containerId, comPreco=false) {
       </div>` : ''}
     </div>
     ${['itens-rm','itens-rp'].includes(containerId) ? `
-    <div class="item-troca-row" style="display:flex;align-items:center;gap:6px;padding:2px 0 4px 2px">
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.82rem;color:var(--g)">
-        <input type="checkbox" id="ip-troca-${n}" onchange="document.getElementById('ip-motivo-troca-${n}').style.display=this.checked?'':'none'" style="accent-color:var(--a);width:15px;height:15px">
-        <span>🔄 Troca?</span>
+    <div class="troca-row">
+      <label class="troca-label">
+        <input type="checkbox" id="ip-troca-${n}" class="troca-chk" onchange="document.getElementById('ip-motivo-troca-${n}').style.display=this.checked?'':'none'" style="position:absolute;opacity:0;width:0;height:0">
+        <span class="troca-tick"></span>
+        <span class="troca-lbl-txt">🔄 Troca?</span>
       </label>
-      <input type="text" id="ip-motivo-troca-${n}" placeholder="Motivo da troca..." style="display:none;flex:1;font-size:.82rem;padding:4px 8px;border:1px solid var(--g3);border-radius:6px">
+      <input type="text" id="ip-motivo-troca-${n}" placeholder="Motivo da troca..." style="display:none;flex:1;font-size:.82rem;padding:5px 10px;border:1.5px solid var(--bd);border-radius:6px">
     </div>` : ''}`;
   cnt.appendChild(d);
   criarAC(document.getElementById('ip-sku-'+n), q=>opsProd(q), opt=>{
@@ -1760,7 +1768,7 @@ function _deduplicarPorOpId(retornaveis, estoque) {
   estoque.forEach(e => {
     const op = String(e.op_id || '');
     const tipo = String(e.tipo_mov || '').toLowerCase();
-    if (op && (tipo.indexOf('ajuste') >= 0 || tipo.indexOf('devoluc') >= 0)) {
+    if (op && (tipo.indexOf('ajuste') >= 0 || tipo.indexOf('devoluc') >= 0 || tipo.indexOf('troca') >= 0)) {
       opIdsEst[op] = e;
     }
   });
@@ -1816,7 +1824,7 @@ async function carregarPendencias(papel) {
       // Estoque pendentes que estão vinculados via op_id (produtos consignados devolvidos)
       const estPatio = estTodos.filter(m => {
         const tipo = String(m.tipo_mov||'').toLowerCase();
-        return tipo.includes('ajuste +') || tipo.includes('ajuste pos');
+        return tipo.includes('ajuste +') || tipo.includes('ajuste pos') || tipo.includes('entrada troca');
       });
 
       // Deduplicar: se Retornável e Estoque compartilham op_id,
@@ -1883,7 +1891,7 @@ async function carregarPendencias(papel) {
         const sku  = String(m.sku||'').toUpperCase();
         const tipo = String(m.tipo_mov||'').toLowerCase();
         if (sku.indexOf('BARRIL-') === 0) return false;
-        return tipo.includes('entrada compra') || tipo.includes('entrada f') || tipo.includes('devoluc') || tipo.includes('ajuste +') || tipo.includes('ajuste pos');
+        return tipo.includes('entrada compra') || tipo.includes('entrada f') || tipo.includes('devoluc') || tipo.includes('ajuste +') || tipo.includes('ajuste pos') || tipo.includes('entrada troca');
       });
 
       // Deduplicar: se Retornável e Estoque compartilham op_id,
@@ -1925,11 +1933,13 @@ async function carregarPendencias(papel) {
           const qtd = parseFloat(p.qtd || p.qtd_entrada || p.qtd_saida || 0);
           map[cli].total_unidades += qtd;
           const prod = p.produto || p.sku || 'Produto';
-          if (!map[cli].skus[prod]) map[cli].skus[prod] = { qtd: 0, sku: p.sku || '', ids: [], abas: [], refs: [] };
+          if (!map[cli].skus[prod]) map[cli].skus[prod] = { qtd: 0, sku: p.sku || '', ids: [], abas: [], refs: [], troca: false };
           map[cli].skus[prod].qtd += qtd;
           map[cli].skus[prod].ids.push(p.id || '');
           map[cli].skus[prod].abas.push(p.qtd !== undefined && p.qtd_entrada === undefined ? 'retornaveis' : 'estoque');
           map[cli].skus[prod].refs.push(p.ref || '');
+          const tipoMov = String(p.tipo_mov || '').toLowerCase();
+          if (tipoMov.includes('troca')) map[cli].skus[prod].troca = true;
           const obs = (p.obs || '').trim();
           if (obs) map[cli].obs_list.push({ produto: prod, obs: obs, por: p.registrado_por || '' });
         });
@@ -1994,10 +2004,13 @@ function renderPendMotorista(grupo) {
   grupo.registros.forEach(r => {
     const prod = r.produto || r.sku || 'Produto';
     const qtd = parseFloat(r.qtd || r.qtd_entrada || 0);
-    const isConsig = r._tem_retornavel || String(r.tipo_mov||'').toLowerCase().indexOf('ajuste') >= 0;
-    if (!totalPorProd[prod]) totalPorProd[prod] = { qtd: 0, sku: r.sku || '', consig: isConsig };
+    const tipoMov = String(r.tipo_mov||'').toLowerCase();
+    const isConsig = r._tem_retornavel || tipoMov.indexOf('ajuste') >= 0;
+    const isTroca = tipoMov.includes('troca');
+    if (!totalPorProd[prod]) totalPorProd[prod] = { qtd: 0, sku: r.sku || '', consig: isConsig, troca: isTroca };
     totalPorProd[prod].qtd += qtd;
     if (isConsig) totalPorProd[prod].consig = true;
+    if (isTroca) totalPorProd[prod].troca = true;
   });
 
   // === Agregar por cliente > produto (visao detalhada) ===
@@ -2016,7 +2029,11 @@ function renderPendMotorista(grupo) {
   let html = '';
   html += '<div class="pend-head" style="background:var(--b2)">';
   html += '  <div>';
-  html += '    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--b)">🚛 Retorno em Rota</div>';
+  const _temTrocaMot = Object.values(totalPorProd).some(p => p.troca);
+  html += '    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
+  html += '      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--b)">🚛 Retorno em Rota</span>';
+  if (_temTrocaMot) html += '      <span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;background:var(--a2);color:var(--a);border:1px solid var(--a)">🔄 TROCA</span>';
+  html += '    </div>';
   html += '    <div class="pend-cliente" style="margin-top:4px;font-size:15px;font-weight:700">' + grupo.motorista + '</div>';
   html += '    <div style="font-size:11px;color:var(--ink3)">' + (grupo.data || '') + ' · ' + numClientes + ' cliente(s)</div>';
   html += '  </div>';
@@ -2035,13 +2052,16 @@ function renderPendMotorista(grupo) {
   html += '</tr></thead><tbody>';
 
   Object.entries(totalPorProd).forEach(([prod, info]) => {
-    html += '<tr style="border-bottom:1px solid var(--bd)">';
+    html += '<tr style="border-bottom:1px solid var(--bd);' + (info.troca ? 'background:var(--a2)' : '') + '">';
     html += '<td style="padding:8px 10px">';
-    html += '  <div style="font-weight:500;line-height:1.3">' + prod + '</div>';
+    html += '  <div style="font-weight:500;line-height:1.3;display:flex;align-items:center;gap:6px">' + prod;
+    if (info.troca) html += ' <span style="display:inline-block;padding:1px 6px;border-radius:99px;font-size:9px;font-weight:700;background:var(--a);color:#fff;letter-spacing:.3px;white-space:nowrap">🔄 TROCA</span>';
+    html += '</div>';
     if (info.sku && info.sku !== prod) {
       html += '  <div style="font-size:10px;color:var(--ink4)">' + info.sku + '</div>';
     }
-    if (info.consig) html += '  <div style="font-size:9px;color:var(--b);font-weight:600;margin-top:1px">📦 Produto cheio (consignado)</div>';
+    if (info.troca) html += '  <div style="font-size:9px;color:var(--a);font-weight:600;margin-top:1px">Produto defeituoso — troca</div>';
+    else if (info.consig) html += '  <div style="font-size:9px;color:var(--b);font-weight:600;margin-top:1px">📦 Produto cheio (consignado)</div>';
     html += '</td>';
     html += '<td style="padding:8px 10px;text-align:center;font-weight:700;font-size:14px">' + info.qtd + '</td>';
     html += '</tr>';
@@ -2135,6 +2155,13 @@ function renderPendCliente(grupo, papel) {
     return isEst && (tipo.indexOf('ajuste +') >= 0 || tipo.indexOf('ajuste pos') >= 0 || tipo.indexOf('entrada devolu') >= 0);
   });
   const temConsignado = produtosConsig.length > 0;
+
+  // Detectar trocas (Estoque com tipo_mov "Entrada Troca")
+  const produtosTroca = grupo.registros.filter(r => {
+    const tipo = String(r.tipo_mov || '').toLowerCase();
+    return tipo.includes('troca');
+  });
+  const temTroca = produtosTroca.length > 0;
   const cid = 'consig-' + (grupo.registros[0]?.id || Math.random().toString(36).slice(2,8));
 
   // Dados do grupo
@@ -2152,7 +2179,9 @@ function renderPendCliente(grupo, papel) {
   grupo.registros.forEach(r => {
     const isRet = r.qtd !== undefined && r.qtd_entrada === undefined;
     const orig = String(r.origem_registro||'').toLowerCase();
-    if (!isRet) tiposSet.add('Entrada Estoque');
+    const tipoMov = String(r.tipo_mov||'').toLowerCase();
+    if (tipoMov.includes('troca')) tiposSet.add('Troca Produto');
+    else if (!isRet) tiposSet.add('Entrada Estoque');
     else if (orig === 'motorista') tiposSet.add('Retorno em Rota');
     else if (orig === 'patio_distribuidor') tiposSet.add('Devolução no Pátio');
     else tiposSet.add('Retorno Vasilhame');
@@ -2166,6 +2195,7 @@ function renderPendCliente(grupo, papel) {
   html += '    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
   html += '      <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--g)">' + tipoLabel + '</span>';
   if (temConsignado) html += '      <span class="consig-tag">📦 Consignado</span>';
+  if (temTroca) html += '      <span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;background:var(--a2);color:var(--a);border:1px solid var(--a)">🔄 TROCA</span>';
   html += '    </div>';
   html += '    <div class="pend-cliente" style="margin-top:4px;font-size:15px;font-weight:700">' + grupo.cliente + '</div>';
   html += '    <div style="font-size:11px;color:var(--ink3)">' + (dataMax || '') + (registradoPor ? ' · por ' + registradoPor : '') + ' · ' + numProdutos + ' produto(s)</div>';
@@ -2185,12 +2215,16 @@ function renderPendCliente(grupo, papel) {
   html += '</tr></thead><tbody>';
 
   Object.entries(grupo.skus).forEach(([prod, info]) => {
-    html += '<tr style="border-bottom:1px solid var(--bd)">';
+    const isTroca = info.troca;
+    html += '<tr style="border-bottom:1px solid var(--bd);' + (isTroca ? 'background:var(--a2)' : '') + '">';
     html += '<td style="padding:8px 10px">';
-    html += '  <div style="font-weight:500;line-height:1.3">' + prod + '</div>';
+    html += '  <div style="font-weight:500;line-height:1.3;display:flex;align-items:center;gap:6px">' + prod;
+    if (isTroca) html += ' <span style="display:inline-block;padding:1px 6px;border-radius:99px;font-size:9px;font-weight:700;background:var(--a);color:#fff;letter-spacing:.3px;white-space:nowrap">🔄 TROCA</span>';
+    html += '</div>';
     if (info.sku && info.sku !== prod) {
       html += '  <div style="font-size:10px;color:var(--ink4)">' + info.sku + '</div>';
     }
+    if (isTroca) html += '  <div style="font-size:10px;color:var(--a);font-weight:500">Entrada Estoque — Produto defeituoso</div>';
     html += '</td>';
     html += '<td style="padding:8px 10px;text-align:center;font-weight:700;font-size:14px">' + info.qtd + '</td>';
     html += '</tr>';
@@ -2262,8 +2296,9 @@ function renderPendCliente(grupo, papel) {
     const prod = r.produto || r.sku || '—';
     const tipo = r.tipo_mov || (isRet ? 'Retornável' : 'Estoque');
     const abaReg = isRet ? 'retornaveis' : 'estoque';
-    html += '<tr style="border-bottom:1px solid var(--bd)">';
-    html += '<td style="padding:6px 10px;font-size:12px">' + prod + '</td>';
+    const isTrocaReg = String(r.tipo_mov||'').toLowerCase().includes('troca');
+    html += '<tr style="border-bottom:1px solid var(--bd);' + (isTrocaReg ? 'background:var(--a2)' : '') + '">';
+    html += '<td style="padding:6px 10px;font-size:12px">' + prod + (isTrocaReg ? ' <span style="font-size:9px;font-weight:700;color:var(--a)">🔄 TROCA</span>' : '') + '</td>';
     html += '<td style="padding:6px 6px;text-align:center;font-weight:600">' + qtd + '</td>';
     html += '<td style="padding:6px 6px;font-size:11px;color:var(--ink3)">' + tipo + '</td>';
     html += '<td style="padding:6px 4px;text-align:center"><button class="cli-corr-btn" data-id="' + (r.id||'') + '" data-aba="' + abaReg + '" style="font-size:10px;padding:3px 8px;background:var(--a2);color:var(--a);border:1px solid var(--a);border-radius:6px;cursor:pointer;font-weight:600">✏️</button></td>';
@@ -2895,10 +2930,12 @@ async function submitCorrecao(id, aba) {
 // ══════════════════════════════════════════════════════════════
 
 const TROCA_STATUS = {
-  pendente:        { label: 'Aguardando envio', cor: 'var(--a)', bg: 'var(--a2)', icon: '⏳', acao: 'Enviado p/ Fábrica', proximo: 'enviado_fabrica' },
-  enviado_fabrica: { label: 'Na fábrica',       cor: 'var(--b)', bg: 'var(--b2)', icon: '🏭', acao: 'Retornou da Fábrica', proximo: 'pronto' },
-  pronto:          { label: 'Pronto p/ entrega', cor: 'var(--g)', bg: 'var(--g2)', icon: '✅', acao: 'Entregue ao Cliente',  proximo: 'entregue' },
-  entregue:        { label: 'Entregue',          cor: 'var(--ink3)', bg: 'var(--bg)', icon: '✓', acao: null, proximo: null },
+  pendente:        { label: 'Aguardando envio', cor: 'var(--a)',    bg: 'var(--a2)', icon: '⏳', acao: 'Enviado p/ Fábrica', proximo: 'enviado_fabrica' },
+  enviado_fabrica: { label: 'Na fábrica',       cor: 'var(--b)',    bg: 'var(--b2)', icon: '🏭', acao: 'Retornou da Fábrica', proximo: 'pronto' },
+  pronto:          { label: 'Pronto p/ entrega', cor: 'var(--g)',   bg: 'var(--g2)', icon: '✅', acao: 'Entregue ao Cliente',  proximo: 'entregue' },
+  entregue:        { label: 'Entregue',          cor: 'var(--ink3)',bg: 'var(--bg)', icon: '✓',  acao: null, proximo: null },
+  nao_aprovado:    { label: 'Não aprovado',      cor: 'var(--r)',   bg: '#fef2f2',   icon: '✗',  acao: null, proximo: null },
+  uso_interno:     { label: 'Uso interno',       cor: 'var(--b)',   bg: 'var(--b2)', icon: '🏠', acao: null, proximo: null },
 };
 
 async function carregarTrocas() {
@@ -2920,7 +2957,7 @@ async function carregarTrocas() {
     if (dashEl) {
       dashEl.innerHTML =
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">' +
-        Object.keys(TROCA_STATUS).map(function(st) {
+        ['pendente','enviado_fabrica','pronto','entregue'].map(function(st) {
           var cfg = TROCA_STATUS[st];
           var qtd = dash[st] || 0;
           return '<div style="background:' + cfg.bg + ';border-radius:var(--rad2);padding:8px 6px;text-align:center">' +
@@ -2928,15 +2965,29 @@ async function carregarTrocas() {
             '<div style="font-size:9px;font-weight:600;color:var(--ink3);text-transform:uppercase">' + cfg.label + '</div>' +
           '</div>';
         }).join('') +
-        '</div>';
+        '</div>' +
+        ((dash.nao_aprovado||0) + (dash.uso_interno||0) > 0 ?
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px">' +
+          ['nao_aprovado','uso_interno'].map(function(st) {
+            var cfg = TROCA_STATUS[st];
+            var qtd = dash[st] || 0;
+            if (!qtd) return '';
+            return '<div style="background:' + cfg.bg + ';border-radius:var(--rad2);padding:6px;text-align:center">' +
+              '<div style="font-size:14px;font-weight:700;color:' + cfg.cor + '">' + qtd + '</div>' +
+              '<div style="font-size:9px;font-weight:600;color:var(--ink3);text-transform:uppercase">' + cfg.label + '</div>' +
+            '</div>';
+          }).join('') +
+          '</div>'
+        : '');
     }
 
     // Lista de trocas agrupadas por status
     const listaEl = document.getElementById('lista-trocas');
     if (!listaEl) return;
 
-    // Filtrar: mostrar tudo exceto entregues (a menos que recentes)
-    const ativas = trocas.filter(function(t) { return String(t.status||'') !== 'entregue'; });
+    // Filtrar: mostrar tudo exceto finalizados (entregue, nao_aprovado, uso_interno)
+    const FINAIS = ['entregue', 'nao_aprovado', 'uso_interno'];
+    const ativas = trocas.filter(function(t) { return FINAIS.indexOf(String(t.status||'')) < 0; });
     if (!ativas.length) {
       listaEl.innerHTML = '<div class="empty"><div class="empty-icon">🔄</div><div class="empty-txt">Nenhuma troca pendente</div></div>';
       return;
@@ -2949,17 +3000,28 @@ async function carregarTrocas() {
       const cfg = TROCA_STATUS[st];
       html += '<div style="margin-top:10px">';
       html += '<div style="font-size:11px;font-weight:700;color:' + cfg.cor + ';text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">' + cfg.icon + ' ' + cfg.label + ' (' + grupo.length + ')</div>';
-      grupo.forEach(function(t) { html += _renderTrocaCard(t, cfg); });
+      grupo.forEach(function(t) { html += _renderTrocaCard(t, cfg, st); });
       html += '</div>';
     });
     listaEl.innerHTML = html;
 
-    // Bind botões de ação
+    // Bind botões de ação principal
     listaEl.querySelectorAll('.troca-acao-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
+        _avancarTroca(btn.dataset.id, btn.dataset.proximo, btn);
+      });
+    });
+    // Bind botões de ação secundária
+    listaEl.querySelectorAll('.troca-sec-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
         var id = btn.dataset.id;
-        var prox = btn.dataset.proximo;
-        _avancarTroca(id, prox, btn);
+        var acao = btn.dataset.acao;
+        if (acao === 'uso_interno') {
+          if (!confirm('Converter em uso interno?\nIsso criará uma entrada de estoque (Ajuste +) com esse produto.')) return;
+        } else if (acao === 'nao_aprovado') {
+          if (!confirm('Marcar como não aprovado pela fábrica?')) return;
+        }
+        _avancarTroca(id, acao, btn);
       });
     });
 
@@ -2969,28 +3031,35 @@ async function carregarTrocas() {
   }
 }
 
-function _renderTrocaCard(t, cfg) {
+function _renderTrocaCard(t, cfg, statusAtual) {
   var html = '<div style="background:var(--card);border-radius:var(--rad2);border:1px solid var(--bd);margin-bottom:6px;overflow:hidden" id="troca-' + t.id + '">';
   // Header
-  html += '<div style="padding:10px 12px;display:flex;align-items:center;justify-content:space-between">';
-  html += '  <div>';
+  html += '<div style="padding:10px 12px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px">';
+  html += '  <div style="flex:1;min-width:0">';
   html += '    <div style="font-weight:700;font-size:13px">' + (t.cliente || '—') + '</div>';
   html += '    <div style="font-size:11px;color:var(--ink3)">' + (t.produto || t.sku || '') + ' · Qtd: <strong>' + (t.qtd || 0) + '</strong> · ' + (t.data || '') + '</div>';
   if (t.motivo) html += '    <div style="font-size:11px;color:var(--a);margin-top:2px">Motivo: ' + t.motivo + '</div>';
   if (t.pedido_troca) html += '    <div style="font-size:11px;color:var(--g);margin-top:2px">Pedido troca: #' + t.pedido_troca + '</div>';
   html += '  </div>';
-  // Botão de ação
+  // Botões de ação
+  html += '  <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0">';
   if (cfg.acao) {
     if (cfg.proximo === 'entregue') {
-      // Para "entregue" precisa do nº do pedido
-      html += '  <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">';
       html += '    <input type="text" id="ped-troca-' + t.id + '" placeholder="Nº pedido" style="width:90px;font-size:11px;padding:4px 6px;border:1.5px solid var(--bd);border-radius:6px;text-align:center">';
       html += '    <button class="btn btn-primary troca-acao-btn" data-id="' + t.id + '" data-proximo="' + cfg.proximo + '" style="font-size:11px;padding:6px 12px">' + cfg.acao + '</button>';
-      html += '  </div>';
     } else {
-      html += '  <button class="btn btn-primary troca-acao-btn" data-id="' + t.id + '" data-proximo="' + cfg.proximo + '" style="font-size:11px;padding:6px 12px;white-space:nowrap">' + cfg.acao + '</button>';
+      html += '    <button class="btn btn-primary troca-acao-btn" data-id="' + t.id + '" data-proximo="' + cfg.proximo + '" style="font-size:11px;padding:6px 12px;white-space:nowrap">' + cfg.acao + '</button>';
     }
   }
+  // Botão secundário: Uso Interno (no status pendente)
+  if (statusAtual === 'pendente') {
+    html += '    <button class="troca-sec-btn" data-id="' + t.id + '" data-acao="uso_interno" style="font-size:10px;padding:4px 10px;background:var(--b2);color:var(--b);border:1px solid var(--b);border-radius:6px;cursor:pointer;font-weight:600;white-space:nowrap">🏠 Uso Interno</button>';
+  }
+  // Botão secundário: Não Aprovado (no status pronto)
+  if (statusAtual === 'pronto') {
+    html += '    <button class="troca-sec-btn" data-id="' + t.id + '" data-acao="nao_aprovado" style="font-size:10px;padding:4px 10px;background:#fef2f2;color:var(--r);border:1px solid var(--r);border-radius:6px;cursor:pointer;font-weight:600;white-space:nowrap">✗ Não Aprovado</button>';
+  }
+  html += '  </div>';
   html += '</div>';
   html += '</div>';
   return html;
@@ -3012,7 +3081,7 @@ async function _avancarTroca(id, proximoStatus, btn) {
     await api('atualizar_status_troca', payload);
     var card = document.getElementById('troca-' + id);
     if (card) { card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; }
-    var labels = { enviado_fabrica: 'Enviado p/ fábrica', pronto: 'Retornou da fábrica', entregue: 'Entregue ao cliente' };
+    var labels = { enviado_fabrica: 'Enviado p/ fábrica', pronto: 'Retornou da fábrica', entregue: 'Entregue ao cliente', nao_aprovado: 'Marcado como não aprovado', uso_interno: 'Convertido em uso interno — estoque atualizado' };
     toast('✓ ' + (labels[proximoStatus] || proximoStatus), 'ok');
     setTimeout(carregarTrocas, 600);
   } catch (e) {
