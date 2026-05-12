@@ -3049,14 +3049,17 @@ async function _submitConsigInline(cid, itens, grupo, produtosConsig, btn) {
 
   try {
     // 1. Ajustar pedido de venda (edita qtd/litros/valor diretamente na linha)
-    const r = await api('devolucao_consignado', {
+    const payload = {
       pedido: primeiro.pedido,
       cliente: primeiro.cliente,
       cliente_id: primeiro.cliente_id,
       empresa: primeiro.empresa,
       itens: itensDevolver,
       registrado_por: NOME,
-    });
+    };
+    console.log('devolucao_consignado payload:', JSON.stringify(payload));
+    const r = await api('devolucao_consignado', payload);
+    console.log('devolucao_consignado resposta:', JSON.stringify(r));
 
     if (btn) btn.textContent = '⌛ Validando registros...';
 
