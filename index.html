@@ -169,6 +169,22 @@ textarea{resize:vertical;min-height:64px}
 .inner-tab .tab-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--r);color:#fff;border-radius:99px;font-size:10px;font-weight:700;min-width:17px;height:17px;padding:0 4px;margin-left:5px}
 .inner-panel{display:none}
 .inner-panel.active{display:flex;flex-direction:column;gap:10px}
+
+/* ── Modal de correção ────────────────────────────────── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:flex-end;justify-content:center;animation:fi .15s ease}
+.modal-content{background:var(--bg2);border-radius:var(--rad) var(--rad) 0 0;width:100%;max-width:480px;max-height:85dvh;overflow-y:auto;padding:0}
+.modal-header{padding:16px 18px;font-size:16px;font-weight:700;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
+.modal-header .btn-close{width:30px;height:30px;border-radius:50%;background:var(--bg);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:var(--ink3)}
+.modal-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.modal-footer{padding:12px 18px;border-top:1px solid var(--bd);display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* ── Card editável do motorista ───────────────────────── */
+.edit-inline{display:none;padding:10px 13px;border-top:2px solid var(--a);background:var(--a2);flex-direction:column;gap:10px}
+.edit-inline.open{display:flex}
+.edit-inline .fg{margin:0}
+.edit-inline label{font-size:11px}
+.edit-inline input,.edit-inline select{font-size:14px;padding:8px 10px}
+.edit-btns{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:4px}
 </style>
 </head>
 <body>
@@ -306,31 +322,51 @@ if (document.readyState === 'loading') {
 ════════════════════════════════════════════════════ -->
 <div class="screen" id="sc-motorista">
   <div class="main">
-    <div class="content">
-      <div class="slabel">Lançamentos de campo</div>
-      <div class="acard" onclick="abrirForm('retorno-motorista')">
-        <div class="acard-icon ic-amber">🔄</div>
-        <div class="acard-body">
-          <div class="acard-title">Retorno de vasilhame</div>
-          <div class="acard-sub">Barris / chopeiras coletados em rota</div>
-        </div>
-        <div class="acard-right">›</div>
+    <!-- Abas internas: Lançamentos | Meus Lançamentos -->
+    <div class="inner-tabs">
+      <div class="inner-tab active" id="mot-tab-lanc" onclick="motoristaAba('lanc')">Lançamentos</div>
+      <div class="inner-tab" id="mot-tab-meus" onclick="motoristaAba('meus')">
+        Meus Lanç. <span class="tab-badge" id="mot-badge-meus" style="display:none">0</span>
       </div>
-      <div class="acard" onclick="abrirForm('abastecimento')">
-        <div class="acard-icon ic-blue">⛽</div>
-        <div class="acard-body">
-          <div class="acard-title">Abastecimento</div>
-          <div class="acard-sub">Tanque próprio ou posto externo</div>
+    </div>
+
+    <div class="content" style="padding-top:12px">
+      <!-- Painel: Lançamentos (original) -->
+      <div class="inner-panel active" id="mot-panel-lanc">
+        <div class="slabel">Lançamentos de campo</div>
+        <div class="acard" onclick="abrirForm('retorno-motorista')">
+          <div class="acard-icon ic-amber">🔄</div>
+          <div class="acard-body">
+            <div class="acard-title">Retorno de vasilhame</div>
+            <div class="acard-sub">Barris / chopeiras coletados em rota</div>
+          </div>
+          <div class="acard-right">›</div>
         </div>
-        <div class="acard-right">›</div>
+        <div class="acard" onclick="abrirForm('abastecimento')">
+          <div class="acard-icon ic-blue">⛽</div>
+          <div class="acard-body">
+            <div class="acard-title">Abastecimento</div>
+            <div class="acard-sub">Tanque próprio ou posto externo</div>
+          </div>
+          <div class="acard-right">›</div>
+        </div>
+        <div class="acard" onclick="abrirForm('ocorrencia')">
+          <div class="acard-icon ic-gray">⚠️</div>
+          <div class="acard-body">
+            <div class="acard-title">Ocorrência de entrega</div>
+            <div class="acard-sub">Cliente ausente, entrega parcial…</div>
+          </div>
+          <div class="acard-right">›</div>
+        </div>
       </div>
-      <div class="acard" onclick="abrirForm('ocorrencia')">
-        <div class="acard-icon ic-gray">⚠️</div>
-        <div class="acard-body">
-          <div class="acard-title">Ocorrência de entrega</div>
-          <div class="acard-sub">Cliente ausente, entrega parcial…</div>
+
+      <!-- Painel: Meus Lançamentos (pendentes) -->
+      <div class="inner-panel" id="mot-panel-meus">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div class="slabel" style="margin:0">Seus lançamentos pendentes</div>
+          <span onclick="carregarMeusLancamentos()" style="font-size:11px;color:var(--g);cursor:pointer;font-weight:500">↻ Atualizar</span>
         </div>
-        <div class="acard-right">›</div>
+        <div id="meus-lanc-list"></div>
       </div>
     </div>
   </div>
@@ -425,13 +461,16 @@ if (document.readyState === 'loading') {
 ════════════════════════════════════════════════════ -->
 <div class="screen" id="sc-comercial">
   <div class="main">
-    <!-- Abas internas: Distribuidores | PDV -->
+    <!-- Abas internas: Distribuidores | PDV | Consignados -->
     <div class="inner-tabs">
       <div class="inner-tab active" id="com-tab-dist" onclick="comercialAba('dist')">
         Distribuidores <span class="tab-badge" id="com-badge-dist" style="display:none">0</span>
       </div>
       <div class="inner-tab" id="com-tab-pdv" onclick="comercialAba('pdv')">
         PDV <span class="tab-badge" id="com-badge-pdv" style="display:none">0</span>
+      </div>
+      <div class="inner-tab" id="com-tab-consig" onclick="comercialAba('consig')">
+        Consignados
       </div>
     </div>
 
@@ -452,6 +491,32 @@ if (document.readyState === 'loading') {
           <span onclick="carregarPendencias('comercial')" style="font-size:11px;color:var(--g);cursor:pointer;font-weight:500">↻ Atualizar</span>
         </div>
         <div id="pend-comercial-pdv"></div>
+      </div>
+
+      <!-- Painel Consignados -->
+      <div class="inner-panel" id="com-panel-consig">
+        <div class="slabel">Devolução de Consignado</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <!-- Busca por pedido -->
+          <div class="fg">
+            <label>Nº do Pedido</label>
+            <div style="display:flex;gap:6px">
+              <input id="consig-pedido" type="text" placeholder="Ex: 12345" style="flex:1">
+              <button class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="buscarConsignado('pedido')">Buscar</button>
+            </div>
+          </div>
+          <!-- Busca por cliente -->
+          <div class="fg">
+            <label>Ou buscar por Cliente</label>
+            <div class="ac-wrap">
+              <input id="consig-cliente" type="text" placeholder="Nome do cliente..." autocomplete="off">
+              <div class="ac-list" id="consig-cliente-ac"></div>
+            </div>
+            <button class="btn" style="margin-top:4px;padding:8px 14px;font-size:13px;background:var(--bg);border:1.5px solid var(--bd);color:var(--ink2);border-radius:var(--rad3);cursor:pointer" onclick="buscarConsignado('cliente')">Buscar pedidos do cliente</button>
+          </div>
+        </div>
+        <!-- Resultado da busca -->
+        <div id="consig-resultado" style="margin-top:8px"></div>
       </div>
     </div>
   </div>
@@ -688,6 +753,7 @@ function _ativarPapel(papel, nome) {
   document.getElementById('role-chip').style.display = 'flex';
   mostrarTela(papel);
   _telaAnterior = papel;
+  if (papel==='motorista')   { carregarMeusLancamentos(); }
   if (papel==='patio')      { carregarPendencias('patio'); carregarCarregamentos(); }
   if (papel==='comercial')  carregarPendencias('comercial');
   if (papel==='operacional') carregarSaldoTanque();
@@ -696,8 +762,11 @@ function _ativarPapel(papel, nome) {
 function comercialAba(aba) {
   document.getElementById('com-tab-dist').classList.toggle('active', aba === 'dist');
   document.getElementById('com-tab-pdv').classList.toggle('active', aba === 'pdv');
+  document.getElementById('com-tab-consig').classList.toggle('active', aba === 'consig');
   document.getElementById('com-panel-dist').classList.toggle('active', aba === 'dist');
   document.getElementById('com-panel-pdv').classList.toggle('active', aba === 'pdv');
+  document.getElementById('com-panel-consig').classList.toggle('active', aba === 'consig');
+  if (aba === 'consig') initConsignadoAC();
 }
 
 function patioAba(aba) {
@@ -1991,6 +2060,11 @@ function renderPendCliente(grupo, papel) {
   div.className = 'pend-card';
   div.style.borderLeft = '4px solid var(--g)';
 
+  // Cachear registros individuais para o modal de correção
+  grupo.registros.forEach(r => {
+    if (r.id && typeof PEND_CACHE !== 'undefined') PEND_CACHE.set(r.id, r);
+  });
+
   // Dados do grupo
   const numProdutos = Object.keys(grupo.skus).length;
   const dataMax = grupo.registros.reduce((m, r) => {
@@ -2077,7 +2151,7 @@ function renderPendCliente(grupo, papel) {
   html += '<th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--ink3)">Produto</th>';
   html += '<th style="padding:6px 6px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:45px">Qtd</th>';
   html += '<th style="padding:6px 6px;text-align:left;font-size:10px;font-weight:600;color:var(--ink3)">Tipo</th>';
-  html += '<th style="padding:6px 6px;text-align:left;font-size:10px;font-weight:600;color:var(--ink3)">ID</th>';
+  html += '<th style="padding:6px 6px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:50px"></th>';
   html += '</tr></thead><tbody>';
 
   grupo.registros.forEach(r => {
@@ -2085,12 +2159,12 @@ function renderPendCliente(grupo, papel) {
     const qtd = parseFloat(r.qtd || r.qtd_entrada || r.qtd_saida || 0);
     const prod = r.produto || r.sku || '—';
     const tipo = r.tipo_mov || (isRet ? 'Retornável' : 'Estoque');
-    const idSlice = (r.id || '').slice(-6);
+    const abaReg = isRet ? 'retornaveis' : 'estoque';
     html += '<tr style="border-bottom:1px solid var(--bd)">';
     html += '<td style="padding:6px 10px;font-size:12px">' + prod + '</td>';
     html += '<td style="padding:6px 6px;text-align:center;font-weight:600">' + qtd + '</td>';
     html += '<td style="padding:6px 6px;font-size:11px;color:var(--ink3)">' + tipo + '</td>';
-    html += '<td style="padding:6px 6px;font-family:\'DM Mono\',monospace;font-size:10px;color:var(--ink4)">' + idSlice + '</td>';
+    html += '<td style="padding:6px 4px;text-align:center"><button class="cli-corr-btn" data-id="' + (r.id||'') + '" data-aba="' + abaReg + '" style="font-size:10px;padding:3px 8px;background:var(--a2);color:var(--a);border:1px solid var(--a);border-radius:6px;cursor:pointer;font-weight:600">✏️</button></td>';
     html += '</tr>';
   });
 
@@ -2106,6 +2180,20 @@ function renderPendCliente(grupo, papel) {
     const aberto = detalheEl.style.display !== 'none';
     detalheEl.style.display = aberto ? 'none' : 'block';
     btnDet.innerHTML = aberto ? '&#128065; Detalhes' : '&#128065; Ocultar';
+  });
+
+  // Botões de correção individual (comercial)
+  div.querySelectorAll('.cli-corr-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const regId = btn.dataset.id;
+      const regAba = btn.dataset.aba;
+      const cached = PEND_CACHE.get(regId);
+      if (cached) {
+        abrirCorrecao(regId, regAba, cached);
+      } else {
+        toast('Dados não encontrados no cache', 'err');
+      }
+    });
   });
 
   // Confirmar todos os registros do cliente
@@ -2216,12 +2304,34 @@ async function valPend(id, aba, status, papel, ref) {
 }
 
 async function editPend(id,aba,papel) {
+  // v2: comercial usa modal completo de correção
+  if (papel === 'comercial') {
+    const cached = PEND_CACHE.get(id);
+    if (cached) {
+      abrirCorrecao(id, aba, cached);
+    } else {
+      // Fallback: buscar dados pela API
+      try {
+        const r = await apiGet(aba === 'retornaveis' ? 'retornaveis' : 'estoque');
+        const dados = r.dados || [];
+        const reg = dados.find(d => d.id === id);
+        if (reg) {
+          abrirCorrecao(id, aba, reg);
+        } else {
+          toast('Registro não encontrado', 'err');
+        }
+      } catch(e) { toast('Erro: ' + e.message, 'err'); }
+    }
+    return;
+  }
+  // Pátio: mantém prompt simples (pátio só valida, não corrige)
   const nova=prompt('Nova quantidade:');
   if(!nova||isNaN(nova)) return;
   try {
-    await api('validar_pendencia',{id,aba,status:'validado',qtd_corrigida:parseFloat(nova),validado_por:NOME});
+    await api('validar_pendencia',{id,aba,status:'validado',correcoes:{qtd:parseFloat(nova)},validado_por:NOME});
     document.getElementById('pc-'+id)?.remove();
     toast('✓ Validado com qtd corrigida: '+nova,'ok');
+    setTimeout(() => carregarPendencias(papel), 500);
   } catch(e) { toast('Erro: '+e.message,'err'); }
 }
 
@@ -2276,6 +2386,495 @@ function toast(msg,type=''){
   const t=document.getElementById('toast');
   t.textContent=msg; t.className='toast '+type; t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),3500);
+}
+
+// ══════════════════════════════════════════════════════════════
+// v2: MOTORISTA — Meus Lançamentos
+// ══════════════════════════════════════════════════════════════
+
+function motoristaAba(aba) {
+  document.getElementById('mot-tab-lanc').classList.toggle('active', aba === 'lanc');
+  document.getElementById('mot-tab-meus').classList.toggle('active', aba === 'meus');
+  document.getElementById('mot-panel-lanc').classList.toggle('active', aba === 'lanc');
+  document.getElementById('mot-panel-meus').classList.toggle('active', aba === 'meus');
+  if (aba === 'meus') carregarMeusLancamentos();
+}
+
+async function carregarMeusLancamentos() {
+  const el = document.getElementById('meus-lanc-list');
+  if (!el) return;
+  el.innerHTML = '<div class="empty"><div class="empty-icon">&#8987;</div><div class="empty-txt">Carregando...</div></div>';
+  try {
+    const r = await apiGet('meus_lancamentos', { registrado_por: NOME });
+    const dados = r.dados || [];
+    const badge = document.getElementById('mot-badge-meus');
+    if (badge) {
+      badge.textContent = dados.length;
+      badge.style.display = dados.length > 0 ? 'inline-flex' : 'none';
+    }
+    if (!dados.length) {
+      el.innerHTML = '<div class="empty"><div class="empty-icon">&#10003;</div><div class="empty-txt">Sem lançamentos pendentes</div></div>';
+      return;
+    }
+    el.innerHTML = '';
+    const lista = document.createElement('div');
+    lista.className = 'pend-list';
+    dados.forEach(p => lista.appendChild(renderMeuLancamento(p)));
+    el.appendChild(lista);
+  } catch (e) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">!</div><div class="empty-txt">Erro ao carregar</div></div>';
+    console.error('Meus lancamentos:', e);
+  }
+}
+
+function renderMeuLancamento(p) {
+  const div = document.createElement('div');
+  div.className = 'pend-card';
+  div.style.borderLeft = '4px solid var(--a)';
+  div.id = 'ml-' + (p.id || '');
+
+  const isRet = p._aba === 'retornaveis';
+  const cliente = p.origem || p.cliente || p.fornecedor || '—';
+  const produto = p.produto || p.sku || '—';
+  const qtd = p.qtd || p.qtd_entrada || 0;
+  const data = p.data || '';
+  const tipo = p._tipo_display || (isRet ? 'Retorno' : 'Estoque');
+
+  let html = '';
+  html += '<div class="pend-head" style="background:var(--a2)">';
+  html += '  <div>';
+  html += '    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--a)">' + tipo + '</div>';
+  html += '    <div class="pend-cliente" style="margin-top:3px">' + cliente + '</div>';
+  html += '  </div>';
+  html += '  <div style="text-align:right;font-size:11px;color:var(--ink3)">' + data + '</div>';
+  html += '</div>';
+  html += '<div class="pend-body">';
+  html += '  <div style="font-size:14px;font-weight:600;margin-bottom:2px">' + produto + '</div>';
+  html += '  <div style="font-size:13px;color:var(--b);font-weight:700;margin-bottom:5px">Quantidade: ' + qtd + ' un</div>';
+  if (p.obs) html += '  <div style="font-size:11px;color:var(--ink3);margin-bottom:5px">Obs: ' + p.obs + '</div>';
+  html += '  <div class="pend-btns">';
+  html += '    <button class="pbtn pbtn-edit ml-btn-edit">&#9998; Editar</button>';
+  html += '    <button class="pbtn pbtn-ok ml-btn-del" style="background:var(--r2);color:var(--r)">&#128465; Excluir</button>';
+  html += '  </div>';
+  html += '</div>';
+
+  // Área de edição inline (oculta)
+  html += '<div class="edit-inline" id="edit-' + p.id + '">';
+  html += '  <div class="fg"><label>Cliente / Origem</label>';
+  html += '    <div class="ac-wrap"><input id="ml-cli-' + p.id + '" type="text" value="' + (cliente !== '—' ? cliente : '') + '" autocomplete="off">';
+  html += '    <div class="ac-list" id="ml-cli-ac-' + p.id + '"></div></div></div>';
+  html += '  <div class="fg"><label>Produto</label>';
+  html += '    <div class="ac-wrap"><input id="ml-prod-' + p.id + '" type="text" value="' + (produto !== '—' ? produto : '') + '" autocomplete="off">';
+  html += '    <div class="ac-list" id="ml-prod-ac-' + p.id + '"></div></div></div>';
+  html += '  <div class="fg"><label>Quantidade</label>';
+  html += '    <input id="ml-qtd-' + p.id + '" type="number" value="' + qtd + '" min="1" step="1"></div>';
+  html += '  <div class="edit-btns">';
+  html += '    <button class="btn" style="background:var(--bg);border:1.5px solid var(--bd);color:var(--ink2);border-radius:var(--rad3);cursor:pointer;font-size:13px;padding:9px" onclick="fecharEdicaoML(\'' + p.id + '\')">Cancelar</button>';
+  html += '    <button class="btn btn-primary" style="font-size:13px;padding:9px" id="ml-save-' + p.id + '">Salvar</button>';
+  html += '  </div>';
+  html += '</div>';
+
+  div.innerHTML = html;
+
+  // Bind eventos
+  div.querySelector('.ml-btn-edit').addEventListener('click', function () {
+    const editDiv = document.getElementById('edit-' + p.id);
+    editDiv.classList.toggle('open');
+    // Inicializar autocompletes
+    const cliInput = document.getElementById('ml-cli-' + p.id);
+    const prodInput = document.getElementById('ml-prod-' + p.id);
+    if (cliInput && !cliInput._ac) {
+      criarAC(cliInput, CLIENTES.map(c => ({ nome: c.nome, id: c.id, meta: c.tipo || '' })),
+        function (sel) { cliInput.value = sel.nome; cliInput._id = sel.id; });
+      cliInput._ac = true;
+    }
+    if (prodInput && !prodInput._ac) {
+      criarAC(prodInput, PRODUTOS.map(pr => ({ nome: pr.produto || pr.sku, id: pr.sku, meta: pr.categoria || '' })),
+        function (sel) { prodInput.value = sel.nome; prodInput._sku = sel.id; });
+      prodInput._ac = true;
+    }
+  });
+
+  div.querySelector('.ml-btn-del').addEventListener('click', async function () {
+    if (!confirm('Excluir este lançamento?')) return;
+    this.disabled = true;
+    this.textContent = '⌛';
+    div.style.opacity = '.4';
+    try {
+      await api('excluir_registro', { id: p.id, aba: p._aba, excluido_por: NOME });
+      div.remove();
+      toast('✓ Lançamento excluído', 'ok');
+      carregarMeusLancamentos();
+    } catch (e) {
+      div.style.opacity = '1';
+      this.disabled = false;
+      this.textContent = '🗑️ Excluir';
+      toast('Erro: ' + e.message, 'err');
+    }
+  });
+
+  // Bind salvar edição
+  setTimeout(function () {
+    var saveBtn = document.getElementById('ml-save-' + p.id);
+    if (saveBtn) saveBtn.addEventListener('click', async function () {
+      const campos = {};
+      const novoCli = document.getElementById('ml-cli-' + p.id)?.value?.trim();
+      const novoProd = document.getElementById('ml-prod-' + p.id)?.value?.trim();
+      const novoProdSku = document.getElementById('ml-prod-' + p.id)?._sku;
+      const novaQtd = parseFloat(document.getElementById('ml-qtd-' + p.id)?.value) || 0;
+
+      if (novoCli && novoCli !== cliente) {
+        campos.origem = novoCli;
+        const cliId = document.getElementById('ml-cli-' + p.id)?._id;
+        if (cliId) campos.origem_id = cliId;
+      }
+      if (novoProd && novoProd !== produto) {
+        campos.produto = novoProd;
+        if (novoProdSku) campos.sku = novoProdSku;
+      }
+      if (novaQtd > 0 && novaQtd !== parseFloat(qtd)) campos.qtd = novaQtd;
+
+      if (!Object.keys(campos).length) { toast('Nenhuma alteração', ''); return; }
+
+      this.disabled = true;
+      this.textContent = '⌛ Salvando...';
+      try {
+        await api('editar_registro', { id: p.id, aba: p._aba, campos, editado_por: NOME });
+        toast('✓ Lançamento atualizado', 'ok');
+        carregarMeusLancamentos();
+      } catch (e) {
+        this.disabled = false;
+        this.textContent = 'Salvar';
+        toast('Erro: ' + e.message, 'err');
+      }
+    });
+  }, 0);
+
+  return div;
+}
+
+function fecharEdicaoML(id) {
+  const el = document.getElementById('edit-' + id);
+  if (el) el.classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════════════════
+// v2: COMERCIAL — Modal de Correção
+// ══════════════════════════════════════════════════════════════
+
+const PEND_CACHE = new Map(); // armazena dados dos pendentes para edição
+
+function abrirCorrecao(id, aba, dadosAtuais) {
+  PEND_CACHE.set(id, { ...dadosAtuais, _aba: aba });
+
+  // Criar modal dinamicamente
+  let overlay = document.getElementById('modal-correcao');
+  if (overlay) overlay.remove();
+
+  overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'modal-correcao';
+
+  const cliente = dadosAtuais.origem || dadosAtuais.cliente || dadosAtuais.fornecedor || '';
+  const produto = dadosAtuais.produto || dadosAtuais.sku || '';
+  const qtd = dadosAtuais.qtd || dadosAtuais.qtd_entrada || 0;
+
+  overlay.innerHTML =
+    '<div class="modal-content">' +
+    '  <div class="modal-header">' +
+    '    <span>Corrigir Registro</span>' +
+    '    <button class="btn-close" onclick="fecharCorrecao()">✕</button>' +
+    '  </div>' +
+    '  <div class="modal-body">' +
+    '    <div class="fg"><label>Cliente / Origem</label>' +
+    '      <div class="ac-wrap"><input id="corr-cliente" type="text" value="' + cliente + '" autocomplete="off">' +
+    '      <div class="ac-list" id="corr-cliente-ac"></div></div></div>' +
+    '    <div class="fg"><label>Produto</label>' +
+    '      <div class="ac-wrap"><input id="corr-produto" type="text" value="' + produto + '" autocomplete="off">' +
+    '      <div class="ac-list" id="corr-produto-ac"></div></div></div>' +
+    '    <div class="fg"><label>Quantidade</label>' +
+    '      <input id="corr-qtd" type="number" value="' + qtd + '" min="0" step="1"></div>' +
+    '    <div class="fg"><label>Motivo da correção</label>' +
+    '      <textarea id="corr-motivo" placeholder="Ex: nome do cliente incorreto..."></textarea></div>' +
+    '  </div>' +
+    '  <div class="modal-footer">' +
+    '    <button class="btn" style="background:var(--bg);border:1.5px solid var(--bd);color:var(--ink2);border-radius:var(--rad3);cursor:pointer" onclick="fecharCorrecao()">Cancelar</button>' +
+    '    <button class="btn btn-primary" id="corr-btn-salvar">Salvar e Validar</button>' +
+    '  </div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+
+  // Fechar clicando fora
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) fecharCorrecao(); });
+
+  // Autocompletes
+  const cliInput = document.getElementById('corr-cliente');
+  const prodInput = document.getElementById('corr-produto');
+  criarAC(cliInput, CLIENTES.map(c => ({ nome: c.nome, id: c.id, meta: c.tipo || '' })),
+    function (sel) { cliInput.value = sel.nome; cliInput._id = sel.id; });
+  criarAC(prodInput, PRODUTOS.map(pr => ({ nome: pr.produto || pr.sku, id: pr.sku, meta: pr.categoria || '' })),
+    function (sel) { prodInput.value = sel.nome; prodInput._sku = sel.id; });
+
+  // Bind salvar
+  document.getElementById('corr-btn-salvar').addEventListener('click', function () {
+    submitCorrecao(id, aba);
+  });
+}
+
+function fecharCorrecao() {
+  const overlay = document.getElementById('modal-correcao');
+  if (overlay) overlay.remove();
+}
+
+async function submitCorrecao(id, aba) {
+  const cached = PEND_CACHE.get(id);
+  if (!cached) return;
+
+  const correcoes = {};
+  const novoCli = document.getElementById('corr-cliente')?.value?.trim();
+  const novoProd = document.getElementById('corr-produto')?.value?.trim();
+  const novoProdSku = document.getElementById('corr-produto')?._sku;
+  const novaQtd = parseFloat(document.getElementById('corr-qtd')?.value) || 0;
+  const motivo = document.getElementById('corr-motivo')?.value?.trim() || '';
+
+  const cliOriginal = cached.origem || cached.cliente || cached.fornecedor || '';
+  const prodOriginal = cached.produto || cached.sku || '';
+  const qtdOriginal = parseFloat(cached.qtd || cached.qtd_entrada || 0);
+
+  if (novoCli && novoCli !== cliOriginal) {
+    correcoes.origem = novoCli;
+    const cliId = document.getElementById('corr-cliente')?._id;
+    if (cliId) correcoes.origem_id = cliId;
+  }
+  if (novoProd && novoProd !== prodOriginal) {
+    correcoes.produto = novoProd;
+    if (novoProdSku) correcoes.sku = novoProdSku;
+  }
+  if (novaQtd > 0 && novaQtd !== qtdOriginal) correcoes.qtd = novaQtd;
+
+  const btn = document.getElementById('corr-btn-salvar');
+  if (btn) { btn.disabled = true; btn.textContent = '⌛ Salvando...'; }
+
+  try {
+    const payload = { id, aba, status: 'validado', validado_por: NOME };
+    if (Object.keys(correcoes).length > 0) {
+      payload.correcoes = correcoes;
+      payload.motivo = motivo;
+    }
+    await api('validar_pendencia', payload);
+    fecharCorrecao();
+    const card = document.getElementById('pc-' + id);
+    if (card) card.remove();
+    const corrMsg = Object.keys(correcoes).length > 0 ? ' + ' + Object.keys(correcoes).length + ' correção(ões)' : '';
+    toast('✓ Validado' + corrMsg, 'ok');
+    setTimeout(() => carregarPendencias('comercial'), 500);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Salvar e Validar'; }
+    toast('Erro: ' + e.message, 'err');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// v2: COMERCIAL — Devolução Consignada
+// ══════════════════════════════════════════════════════════════
+
+function initConsignadoAC() {
+  const cliInput = document.getElementById('consig-cliente');
+  if (cliInput && !cliInput._ac && CLIENTES.length) {
+    criarAC(cliInput, CLIENTES.map(c => ({ nome: c.nome, id: c.id, meta: c.tipo || '' })),
+      function (sel) { cliInput.value = sel.nome; cliInput._id = sel.id; });
+    cliInput._ac = true;
+  }
+}
+
+async function buscarConsignado(modo) {
+  const el = document.getElementById('consig-resultado');
+  if (!el) return;
+
+  let params = {};
+  if (modo === 'pedido') {
+    const ped = document.getElementById('consig-pedido')?.value?.trim();
+    if (!ped) { toast('Informe o número do pedido', 'err'); return; }
+    params.pedido = ped;
+  } else {
+    const cli = document.getElementById('consig-cliente')?.value?.trim();
+    if (!cli) { toast('Informe o cliente', 'err'); return; }
+    params.cliente = cli;
+  }
+
+  el.innerHTML = '<div class="empty"><div class="empty-icon">&#8987;</div><div class="empty-txt">Buscando...</div></div>';
+
+  try {
+    const r = await apiGet('vendas_por_pedido', params);
+    const dados = r.dados || {};
+
+    // Se veio lista de pedidos (busca por cliente)
+    if (dados.pedidos && dados.pedidos.length > 0 && (!dados.itens || !dados.itens.length)) {
+      renderPedidosCliente(dados.pedidos, el);
+      return;
+    }
+
+    // Se veio itens do pedido
+    if (dados.itens && dados.itens.length > 0) {
+      renderDetalhesPedido(dados, el);
+      return;
+    }
+
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-txt">Nenhum pedido encontrado</div></div>';
+  } catch (e) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">!</div><div class="empty-txt">Erro: ' + e.message + '</div></div>';
+  }
+}
+
+function renderPedidosCliente(pedidos, el) {
+  let html = '<div class="slabel" style="margin-top:8px">Pedidos encontrados</div>';
+  html += '<div class="pend-list">';
+  pedidos.forEach(function (ped) {
+    html += '<div class="acard consig-ped-card" data-pedido="' + ped.pedido + '" style="cursor:pointer">';
+    html += '  <div class="acard-icon ic-green">📋</div>';
+    html += '  <div class="acard-body">';
+    html += '    <div class="acard-title">Pedido #' + ped.pedido + '</div>';
+    html += '    <div class="acard-sub">' + ped.cliente + ' · ' + ped.data + ' · ' + ped.itens_count + ' item(ns)</div>';
+    html += '  </div>';
+    html += '  <div class="acard-right">›</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+
+  // Bind clicks
+  el.querySelectorAll('.consig-ped-card').forEach(function (card) {
+    card.addEventListener('click', function () {
+      document.getElementById('consig-pedido').value = card.dataset.pedido;
+      buscarConsignado('pedido');
+    });
+  });
+}
+
+function renderDetalhesPedido(dados, el) {
+  const itens = dados.itens || [];
+  if (!itens.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-txt">Sem itens no pedido</div></div>';
+    return;
+  }
+
+  const primeiro = itens[0];
+  let html = '';
+  html += '<div class="pend-card" style="border-left:4px solid var(--g)">';
+
+  // Header do pedido
+  html += '<div class="pend-head" style="background:var(--g2)">';
+  html += '  <div>';
+  html += '    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--g)">Devolução Consignado</div>';
+  html += '    <div class="pend-cliente" style="margin-top:4px;font-size:15px;font-weight:700">' + primeiro.cliente + '</div>';
+  html += '    <div style="font-size:11px;color:var(--ink3)">Pedido #' + primeiro.pedido + ' · ' + primeiro.data + ' · ' + (primeiro.empresa || '') + '</div>';
+  html += '  </div>';
+  html += '</div>';
+
+  // Tabela de itens
+  html += '<div class="pend-body" style="padding:0">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html += '<thead><tr style="background:var(--bg);border-bottom:1px solid var(--bd)">';
+  html += '<th style="padding:8px 6px;text-align:left;font-size:10px;font-weight:600;color:var(--ink3)">Produto</th>';
+  html += '<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:40px">Orig</th>';
+  html += '<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:40px">Dev.</th>';
+  html += '<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:40px">Disp</th>';
+  html += '<th style="padding:8px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:60px">Devolver</th>';
+  html += '</tr></thead><tbody>';
+
+  itens.forEach(function (item, idx) {
+    const disp = item.qtd_disponivel || 0;
+    html += '<tr style="border-bottom:1px solid var(--bd)">';
+    html += '<td style="padding:6px 6px">';
+    html += '  <div style="font-weight:500;font-size:12px;line-height:1.3">' + item.produto + '</div>';
+    html += '  <div style="font-size:10px;color:var(--ink4)">' + item.sku + '</div>';
+    html += '</td>';
+    html += '<td style="padding:6px 4px;text-align:center;font-weight:600">' + item.qtd + '</td>';
+    html += '<td style="padding:6px 4px;text-align:center;color:var(--a);font-weight:600">' + (item.qtd_ja_devolvida || 0) + '</td>';
+    html += '<td style="padding:6px 4px;text-align:center;color:var(--g);font-weight:700">' + disp + '</td>';
+    html += '<td style="padding:6px 4px;text-align:center">';
+    if (disp > 0) {
+      html += '<input type="number" id="consig-qtd-' + idx + '" class="consig-qtd-input" min="0" max="' + disp + '" value="0" ';
+      html += 'style="width:50px;text-align:center;padding:4px;font-size:13px;font-weight:700;border:1.5px solid var(--bd);border-radius:6px">';
+    } else {
+      html += '<span style="color:var(--ink4);font-size:11px">—</span>';
+    }
+    html += '</td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+
+  // Botão confirmar
+  html += '<div style="padding:12px 13px;border-top:1px solid var(--bd)">';
+  html += '  <button class="btn btn-primary" id="consig-btn-confirmar" style="width:100%;font-size:14px;padding:12px">✓ Confirmar Devolução</button>';
+  html += '</div>';
+
+  html += '</div>';
+  el.innerHTML = html;
+
+  // Bind botão confirmar
+  document.getElementById('consig-btn-confirmar').addEventListener('click', function () {
+    submitDevolucaoConsignado(itens);
+  });
+}
+
+async function submitDevolucaoConsignado(itens) {
+  const itensDevolver = [];
+  itens.forEach(function (item, idx) {
+    const input = document.getElementById('consig-qtd-' + idx);
+    const qtd = input ? parseFloat(input.value) || 0 : 0;
+    if (qtd > 0) {
+      if (qtd > (item.qtd_disponivel || 0)) {
+        throw new Error('Quantidade excede disponível para ' + item.produto);
+      }
+      itensDevolver.push({
+        sku: item.sku,
+        produto: item.produto,
+        categoria: item.categoria,
+        litros_barril: item.litros_barril,
+        preco_unitario: item.preco_unitario,
+        qtd_devolvida: qtd,
+      });
+    }
+  });
+
+  if (!itensDevolver.length) { toast('Selecione ao menos 1 item para devolver', 'err'); return; }
+
+  const primeiro = itens[0];
+  const btn = document.getElementById('consig-btn-confirmar');
+  if (btn) { btn.disabled = true; btn.textContent = '⌛ Processando...'; }
+
+  try {
+    const r = await api('devolucao_consignado', {
+      pedido: primeiro.pedido,
+      cliente: primeiro.cliente,
+      cliente_id: primeiro.cliente_id,
+      empresa: primeiro.empresa,
+      itens: itensDevolver,
+      registrado_por: NOME,
+    });
+
+    const msg = r.dados?.msg || 'Devolução processada';
+    const el = document.getElementById('consig-resultado');
+    if (el) {
+      el.innerHTML =
+        '<div class="pend-card" style="border-left:4px solid var(--g);background:var(--g2)">' +
+        '<div class="pend-body" style="text-align:center;padding:20px">' +
+        '<div style="font-size:24px;margin-bottom:8px">✓</div>' +
+        '<div style="font-size:15px;font-weight:700;color:var(--g);margin-bottom:4px">' + msg + '</div>' +
+        '<div style="font-size:12px;color:var(--ink3)">Pedido #' + primeiro.pedido + '</div>' +
+        '</div></div>';
+    }
+    toast('✓ ' + msg, 'ok');
+    // Limpar campos
+    var pedInput = document.getElementById('consig-pedido');
+    if (pedInput) pedInput.value = '';
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar Devolução'; }
+    toast('Erro: ' + e.message, 'err');
+  }
 }
 </script>
 </body>
