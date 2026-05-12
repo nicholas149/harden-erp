@@ -475,6 +475,9 @@ if (document.readyState === 'loading') {
       <div class="inner-tab" id="com-tab-pdv" onclick="comercialAba('pdv')">
         PDV <span class="tab-badge" id="com-badge-pdv" style="display:none">0</span>
       </div>
+      <div class="inner-tab" id="com-tab-trocas" onclick="comercialAba('trocas')">
+        🔄 Trocas <span class="tab-badge" id="com-badge-trocas" style="display:none">0</span>
+      </div>
     </div>
 
     <div class="content" style="padding-top:12px">
@@ -494,6 +497,16 @@ if (document.readyState === 'loading') {
           <span onclick="carregarPendencias('comercial')" style="font-size:11px;color:var(--g);cursor:pointer;font-weight:500">↻ Atualizar</span>
         </div>
         <div id="pend-comercial-pdv"></div>
+      </div>
+
+      <!-- Painel Trocas -->
+      <div class="inner-panel" id="com-panel-trocas">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div class="slabel" style="margin:0">Controle de Trocas</div>
+          <span onclick="carregarTrocas()" style="font-size:11px;color:var(--g);cursor:pointer;font-weight:500">↻ Atualizar</span>
+        </div>
+        <div id="dash-trocas" style="margin-bottom:10px"></div>
+        <div id="lista-trocas"></div>
       </div>
 
     </div>
@@ -740,8 +753,11 @@ function _ativarPapel(papel, nome) {
 function comercialAba(aba) {
   document.getElementById('com-tab-dist').classList.toggle('active', aba === 'dist');
   document.getElementById('com-tab-pdv').classList.toggle('active', aba === 'pdv');
+  document.getElementById('com-tab-trocas').classList.toggle('active', aba === 'trocas');
   document.getElementById('com-panel-dist').classList.toggle('active', aba === 'dist');
   document.getElementById('com-panel-pdv').classList.toggle('active', aba === 'pdv');
+  document.getElementById('com-panel-trocas').classList.toggle('active', aba === 'trocas');
+  if (aba === 'trocas') carregarTrocas();
 }
 
 function patioAba(aba) {
@@ -1019,6 +1035,16 @@ function formDefs(tipo) {
       <button class="btn-add" onclick="addItem('itens-rp')">+ Adicionar produto</button>
       <div class="fg"><label>Observação</label>
         <textarea id="obs-rp" placeholder="Condição dos barris, observações..."></textarea>
+      </div>
+      <div class="fg" style="margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="troca-rp" onchange="document.getElementById('motivo-troca-wrap').style.display=this.checked?'':'none'">
+          <span style="font-weight:600;color:var(--a)">🔄 É troca? (produto defeituoso)</span>
+        </label>
+      </div>
+      <div class="fg" id="motivo-troca-wrap" style="display:none">
+        <label>Motivo da troca</label>
+        <textarea id="motivo-rp" placeholder="Descreva o defeito: oxidado, contaminado, etc..."></textarea>
       </div>`,
     init: () => {
       initSeg('tipo-cli-rp');
@@ -1535,12 +1561,16 @@ async function submitRetornoPatio() {
   const empresa = 'Master';
   const itens   = coletarItens('itens-rp');
   const obs     = document.getElementById('obs-rp')?.value;
+  const eTroca  = document.getElementById('troca-rp')?.checked || false;
+  const motivoTroca = document.getElementById('motivo-rp')?.value || '';
   if (!cliente) throw new Error('Informe o cliente');
   if (!itens.length) throw new Error('Adicione ao menos um produto');
+  if (eTroca && !motivoTroca.trim()) throw new Error('Informe o motivo da troca');
   for (const it of itens) {
     await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,
-    cliente:cliente, cliente_id:cliId,  // origem = cliente que devolveu
-    empresa, registrado_por:NOME, origem_registro:'patio_distribuidor', obs});
+    cliente:cliente, cliente_id:cliId,
+    empresa, registrado_por:NOME, origem_registro:'patio_distribuidor', obs,
+    tipo_troca:eTroca, motivo_troca:motivoTroca});
   }
   toast('✓ Entrada registrada — aguarda validação do comercial','ok');
   voltarForm();
@@ -2852,6 +2882,137 @@ async function submitCorrecao(id, aba) {
     setTimeout(() => carregarPendencias('comercial'), 500);
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Salvar Correção'; }
+    toast('Erro: ' + e.message, 'err');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// v2: COMERCIAL — Painel de Trocas
+// ══════════════════════════════════════════════════════════════
+
+const TROCA_STATUS = {
+  pendente:        { label: 'Aguardando envio', cor: 'var(--a)', bg: 'var(--a2)', icon: '⏳', acao: 'Enviado p/ Fábrica', proximo: 'enviado_fabrica' },
+  enviado_fabrica: { label: 'Na fábrica',       cor: 'var(--b)', bg: 'var(--b2)', icon: '🏭', acao: 'Retornou da Fábrica', proximo: 'pronto' },
+  pronto:          { label: 'Pronto p/ entrega', cor: 'var(--g)', bg: 'var(--g2)', icon: '✅', acao: 'Entregue ao Cliente',  proximo: 'entregue' },
+  entregue:        { label: 'Entregue',          cor: 'var(--ink3)', bg: 'var(--bg)', icon: '✓', acao: null, proximo: null },
+};
+
+async function carregarTrocas() {
+  try {
+    const [dashRes, listRes] = await Promise.all([
+      apiGet('dash_trocas'),
+      apiGet('trocas'),
+    ]);
+    const dash = dashRes.dados || dashRes || {};
+    const trocas = listRes.dados || listRes || [];
+
+    // Badge
+    const pendTotal = (dash.pendente||0) + (dash.enviado_fabrica||0) + (dash.pronto||0);
+    const badge = document.getElementById('com-badge-trocas');
+    if (badge) { badge.textContent = pendTotal; badge.style.display = pendTotal > 0 ? '' : 'none'; }
+
+    // Dashboard resumo
+    const dashEl = document.getElementById('dash-trocas');
+    if (dashEl) {
+      dashEl.innerHTML =
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">' +
+        Object.keys(TROCA_STATUS).map(function(st) {
+          var cfg = TROCA_STATUS[st];
+          var qtd = dash[st] || 0;
+          return '<div style="background:' + cfg.bg + ';border-radius:var(--rad2);padding:8px 6px;text-align:center">' +
+            '<div style="font-size:18px;font-weight:700;color:' + cfg.cor + '">' + qtd + '</div>' +
+            '<div style="font-size:9px;font-weight:600;color:var(--ink3);text-transform:uppercase">' + cfg.label + '</div>' +
+          '</div>';
+        }).join('') +
+        '</div>';
+    }
+
+    // Lista de trocas agrupadas por status
+    const listaEl = document.getElementById('lista-trocas');
+    if (!listaEl) return;
+
+    // Filtrar: mostrar tudo exceto entregues (a menos que recentes)
+    const ativas = trocas.filter(function(t) { return String(t.status||'') !== 'entregue'; });
+    if (!ativas.length) {
+      listaEl.innerHTML = '<div class="empty"><div class="empty-icon">🔄</div><div class="empty-txt">Nenhuma troca pendente</div></div>';
+      return;
+    }
+
+    let html = '';
+    ['pendente','enviado_fabrica','pronto'].forEach(function(st) {
+      const grupo = ativas.filter(function(t) { return String(t.status||'') === st; });
+      if (!grupo.length) return;
+      const cfg = TROCA_STATUS[st];
+      html += '<div style="margin-top:10px">';
+      html += '<div style="font-size:11px;font-weight:700;color:' + cfg.cor + ';text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">' + cfg.icon + ' ' + cfg.label + ' (' + grupo.length + ')</div>';
+      grupo.forEach(function(t) { html += _renderTrocaCard(t, cfg); });
+      html += '</div>';
+    });
+    listaEl.innerHTML = html;
+
+    // Bind botões de ação
+    listaEl.querySelectorAll('.troca-acao-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var id = btn.dataset.id;
+        var prox = btn.dataset.proximo;
+        _avancarTroca(id, prox, btn);
+      });
+    });
+
+  } catch (e) {
+    console.error('Erro carregando trocas:', e);
+    toast('Erro ao carregar trocas: ' + e.message, 'err');
+  }
+}
+
+function _renderTrocaCard(t, cfg) {
+  var html = '<div style="background:var(--card);border-radius:var(--rad2);border:1px solid var(--bd);margin-bottom:6px;overflow:hidden" id="troca-' + t.id + '">';
+  // Header
+  html += '<div style="padding:10px 12px;display:flex;align-items:center;justify-content:space-between">';
+  html += '  <div>';
+  html += '    <div style="font-weight:700;font-size:13px">' + (t.cliente || '—') + '</div>';
+  html += '    <div style="font-size:11px;color:var(--ink3)">' + (t.produto || t.sku || '') + ' · Qtd: <strong>' + (t.qtd || 0) + '</strong> · ' + (t.data || '') + '</div>';
+  if (t.motivo) html += '    <div style="font-size:11px;color:var(--a);margin-top:2px">Motivo: ' + t.motivo + '</div>';
+  if (t.pedido_troca) html += '    <div style="font-size:11px;color:var(--g);margin-top:2px">Pedido troca: #' + t.pedido_troca + '</div>';
+  html += '  </div>';
+  // Botão de ação
+  if (cfg.acao) {
+    if (cfg.proximo === 'entregue') {
+      // Para "entregue" precisa do nº do pedido
+      html += '  <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">';
+      html += '    <input type="text" id="ped-troca-' + t.id + '" placeholder="Nº pedido" style="width:90px;font-size:11px;padding:4px 6px;border:1.5px solid var(--bd);border-radius:6px;text-align:center">';
+      html += '    <button class="btn btn-primary troca-acao-btn" data-id="' + t.id + '" data-proximo="' + cfg.proximo + '" style="font-size:11px;padding:6px 12px">' + cfg.acao + '</button>';
+      html += '  </div>';
+    } else {
+      html += '  <button class="btn btn-primary troca-acao-btn" data-id="' + t.id + '" data-proximo="' + cfg.proximo + '" style="font-size:11px;padding:6px 12px;white-space:nowrap">' + cfg.acao + '</button>';
+    }
+  }
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+async function _avancarTroca(id, proximoStatus, btn) {
+  var payload = { id: id, status: proximoStatus, atualizado_por: NOME };
+
+  // Se avançando para "entregue", pegar o nº do pedido
+  if (proximoStatus === 'entregue') {
+    var pedInput = document.getElementById('ped-troca-' + id);
+    var ped = pedInput ? pedInput.value.trim() : '';
+    if (!ped) { toast('Informe o nº do pedido da troca', 'err'); return; }
+    payload.pedido_troca = ped;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⌛...'; }
+  try {
+    await api('atualizar_status_troca', payload);
+    var card = document.getElementById('troca-' + id);
+    if (card) { card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; }
+    var labels = { enviado_fabrica: 'Enviado p/ fábrica', pronto: 'Retornou da fábrica', entregue: 'Entregue ao cliente' };
+    toast('✓ ' + (labels[proximoStatus] || proximoStatus), 'ok');
+    setTimeout(carregarTrocas, 600);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = TROCA_STATUS[proximoStatus]?.acao || 'Avançar'; }
     toast('Erro: ' + e.message, 'err');
   }
 }
