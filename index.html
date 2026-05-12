@@ -1720,14 +1720,18 @@ async function submitOcorrencia() {
 // Quando um mesmo op_id aparece nas duas abas (ex: retorno de chopp = barril em Ret + produto em Est),
 // manter apenas o registro do Estoque (tem o produto real) e remover o do Retornáveis.
 function _deduplicarPorOpId(retornaveis, estoque) {
-  // Mapear op_ids que existem no Estoque
+  // Mapear op_ids que existem no Estoque como RETORNO DE PRODUTO (Ajuste + ou Devolução)
+  // Não deduplicar entradas normais de estoque — só quando é um chopp devolvido
   const opIdsEst = {};
   estoque.forEach(e => {
     const op = String(e.op_id || '');
-    if (op) opIdsEst[op] = e;
+    const tipo = String(e.tipo_mov || '').toLowerCase();
+    if (op && (tipo.indexOf('ajuste') >= 0 || tipo.indexOf('devoluc') >= 0)) {
+      opIdsEst[op] = e;
+    }
   });
 
-  // Filtrar retornáveis: remover os que têm op_id duplicado no Estoque
+  // Filtrar retornáveis: remover os que têm op_id duplicado no Estoque (produto)
   const retFiltrado = [];
   retornaveis.forEach(r => {
     const op = String(r.op_id || '');
@@ -2799,15 +2803,33 @@ async function submitCorrecao(id, aba) {
   const qtdOriginal = parseFloat(cached.qtd || cached.qtd_entrada || 0);
 
   if (novoCli && novoCli !== cliOriginal) {
-    correcoes.origem = novoCli;
+    // Estoque usa 'fornecedor', Retornáveis usa 'origem'
+    if (cached._aba === 'estoque') {
+      correcoes.fornecedor = novoCli;
+    } else {
+      correcoes.origem = novoCli;
+    }
     const cliId = document.getElementById('corr-cliente')?._id;
-    if (cliId) correcoes.origem_id = cliId;
+    if (cliId) {
+      if (cached._aba === 'estoque') {
+        correcoes.fornecedor_id = cliId;
+      } else {
+        correcoes.origem_id = cliId;
+      }
+    }
   }
   if (novoProd && novoProd !== prodOriginal) {
     correcoes.produto = novoProd;
     if (novoProdSku) correcoes.sku = novoProdSku;
   }
-  if (novaQtd > 0 && novaQtd !== qtdOriginal) correcoes.qtd = novaQtd;
+  if (novaQtd > 0 && novaQtd !== qtdOriginal) {
+    // Estoque usa 'qtd_entrada', Retornáveis usa 'qtd'
+    if (cached._aba === 'estoque') {
+      correcoes.qtd_entrada = novaQtd;
+    } else {
+      correcoes.qtd = novaQtd;
+    }
+  }
 
   const btn = document.getElementById('corr-btn-salvar');
   if (btn) { btn.disabled = true; btn.textContent = '⌛ Salvando...'; }
@@ -2896,78 +2918,119 @@ function _renderDetalhesInline(cid, dados, grupo, produtosConsig) {
   }
 
   const primeiro = itens[0];
+
+  // Pre-calcular qtd a devolver por SKU (baseado nos produtos consignados devolvidos)
+  const preQtds = {};
+  produtosConsig.forEach(pc => {
+    const sk = pc.sku || pc.produto || '';
+    if (sk) preQtds[sk] = (preQtds[sk] || 0) + parseFloat(pc.qtd_entrada || pc.qtd || 0);
+  });
+
   let html = '';
   html += '<div style="margin-top:8px;border:1.5px solid var(--b);border-radius:var(--rad2);overflow:hidden">';
 
-  // Header compacto
-  html += '<div style="background:var(--b2);padding:8px 10px;border-bottom:1px solid var(--bd)">';
+  // Header
+  html += '<div style="background:var(--b2);padding:10px 12px;border-bottom:1px solid var(--bd)">';
   html += '  <div style="font-size:13px;font-weight:700;color:var(--b)">Pedido #' + primeiro.pedido + '</div>';
   html += '  <div style="font-size:11px;color:var(--ink3)">' + primeiro.cliente + ' · ' + primeiro.data + ' · ' + (primeiro.empresa || '') + '</div>';
   html += '</div>';
 
-  // Tabela de itens
-  html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
-  html += '<thead><tr style="background:var(--bg);border-bottom:1px solid var(--bd)">';
-  html += '<th style="padding:6px;text-align:left;font-size:10px;font-weight:600;color:var(--ink3)">Produto</th>';
-  html += '<th style="padding:6px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:35px">Orig</th>';
-  html += '<th style="padding:6px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:35px">Dev.</th>';
-  html += '<th style="padding:6px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:35px">Disp</th>';
-  html += '<th style="padding:6px 4px;text-align:center;font-size:10px;font-weight:600;color:var(--ink3);width:55px">Devolver</th>';
-  html += '</tr></thead><tbody>';
-
+  // Itens do pedido com simulação de devolução
+  html += '<div style="padding:0">';
   itens.forEach(function (item, idx) {
     const disp = item.qtd_disponivel || 0;
-    // Tentar pre-preencher com a qtd do produto consignado devolvido
+    const qtdOrig = item.qtd || 0;
+    const jaDev = item.qtd_ja_devolvida || 0;
+    // Pre-preencher com a qtd do retorno se o SKU bate
     let preQtd = 0;
-    produtosConsig.forEach(pc => {
-      if ((pc.sku || '') === (item.sku || '') || (pc.produto || '') === (item.produto || '')) {
-        preQtd = Math.min(parseFloat(pc.qtd_entrada || pc.qtd || 0), disp);
-      }
-    });
-
-    html += '<tr style="border-bottom:1px solid var(--bd)">';
-    html += '<td style="padding:5px 6px">';
-    html += '  <div style="font-weight:500;font-size:11px;line-height:1.3">' + item.produto + '</div>';
-    html += '  <div style="font-size:9px;color:var(--ink4)">' + item.sku + '</div>';
-    html += '</td>';
-    html += '<td style="padding:5px 4px;text-align:center;font-weight:600;font-size:12px">' + item.qtd + '</td>';
-    html += '<td style="padding:5px 4px;text-align:center;color:var(--a);font-weight:600;font-size:12px">' + (item.qtd_ja_devolvida || 0) + '</td>';
-    html += '<td style="padding:5px 4px;text-align:center;color:var(--g);font-weight:700;font-size:12px">' + disp + '</td>';
-    html += '<td style="padding:5px 4px;text-align:center">';
     if (disp > 0) {
-      html += '<input type="number" id="' + cid + '-qty-' + idx + '" min="0" max="' + disp + '" value="' + preQtd + '" ';
-      html += 'style="width:45px;text-align:center;padding:3px;font-size:12px;font-weight:700;border:1.5px solid var(--bd);border-radius:6px">';
-    } else {
-      html += '<span style="color:var(--ink4);font-size:11px">—</span>';
+      preQtd = Math.min(preQtds[item.sku] || preQtds[item.produto] || 0, disp);
     }
-    html += '</td>';
-    html += '</tr>';
-  });
-  html += '</tbody></table>';
 
-  // Botão confirmar devolução + validar registros
-  html += '<div style="padding:10px;border-top:1px solid var(--bd);display:flex;flex-direction:column;gap:6px">';
-  html += '  <button class="btn btn-primary" id="' + cid + '-btn-confirm" style="width:100%;font-size:13px;padding:10px">✓ Confirmar Devolução e Validar</button>';
-  html += '  <div style="font-size:10px;color:var(--ink3);text-align:center">Isso ajustará a venda + validará os registros pendentes</div>';
+    html += '<div style="padding:10px 12px;border-bottom:1px solid var(--bd)">';
+    html += '  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+    html += '    <div>';
+    html += '      <div style="font-weight:600;font-size:13px">' + item.produto + '</div>';
+    html += '      <div style="font-size:10px;color:var(--ink4)">' + item.sku + '</div>';
+    html += '    </div>';
+    if (disp > 0) {
+      html += '    <input type="number" id="' + cid + '-qty-' + idx + '" min="0" max="' + disp + '" value="' + preQtd + '" ';
+      html += '     style="width:52px;text-align:center;padding:5px;font-size:14px;font-weight:700;border:1.5px solid var(--b);border-radius:6px;color:var(--b)" ';
+      html += '     onchange="_atualizarPreview(\'' + cid + '\',' + idx + ',' + qtdOrig + ',' + jaDev + ')">';
+    }
+    html += '  </div>';
+
+    // Resumo visual: Pedido | Já devolvido | Devolvendo agora | Ficará com
+    html += '  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;text-align:center">';
+    // No pedido
+    html += '    <div style="background:var(--bg);border-radius:6px;padding:4px">';
+    html += '      <div style="font-size:9px;color:var(--ink3);font-weight:600">NO PEDIDO</div>';
+    html += '      <div style="font-size:15px;font-weight:700">' + qtdOrig + '</div>';
+    html += '    </div>';
+    // Já devolvido
+    html += '    <div style="background:' + (jaDev > 0 ? 'var(--a2)' : 'var(--bg)') + ';border-radius:6px;padding:4px">';
+    html += '      <div style="font-size:9px;color:var(--ink3);font-weight:600">JÁ DEVOL.</div>';
+    html += '      <div style="font-size:15px;font-weight:700;color:' + (jaDev > 0 ? 'var(--a)' : 'var(--ink4)') + '">' + jaDev + '</div>';
+    html += '    </div>';
+    // Devolvendo agora
+    html += '    <div style="background:var(--r2);border-radius:6px;padding:4px">';
+    html += '      <div style="font-size:9px;color:var(--ink3);font-weight:600">DEVOLVENDO</div>';
+    html += '      <div style="font-size:15px;font-weight:700;color:var(--r)" id="' + cid + '-devn-' + idx + '">' + preQtd + '</div>';
+    html += '    </div>';
+    // Ficará com
+    var ficaCom = qtdOrig - jaDev - preQtd;
+    html += '    <div style="background:var(--g2);border-radius:6px;padding:4px">';
+    html += '      <div style="font-size:9px;color:var(--ink3);font-weight:600">FICARÁ COM</div>';
+    html += '      <div style="font-size:15px;font-weight:700;color:var(--g)" id="' + cid + '-fica-' + idx + '">' + ficaCom + '</div>';
+    html += '    </div>';
+    html += '  </div>';
+
+    if (disp <= 0 && qtdOrig > 0) {
+      html += '  <div style="font-size:10px;color:var(--ink4);text-align:center;margin-top:4px">Já totalmente devolvido</div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Botão confirmar
+  html += '<div style="padding:10px 12px;border-top:1px solid var(--bd);display:flex;flex-direction:column;gap:6px">';
+  html += '  <button class="btn btn-primary" id="' + cid + '-btn-confirm" style="width:100%;font-size:14px;padding:11px">✓ Confirmar Devolução e Validar</button>';
+  html += '  <div style="font-size:10px;color:var(--ink3);text-align:center">Ajusta a venda (linha negativa) + valida os registros pendentes</div>';
   html += '</div>';
 
   html += '</div>';
   el.innerHTML = html;
 
-  // Bind confirmar
-  document.getElementById(cid + '-btn-confirm').addEventListener('click', function () {
-    _submitConsigInline(cid, itens, grupo, produtosConsig, this);
-  });
+  // Bind confirmar — usar querySelector dentro do el (já está no DOM via innerHTML)
+  var btnConfirm = document.getElementById(cid + '-btn-confirm');
+  if (btnConfirm) {
+    btnConfirm.addEventListener('click', function () {
+      _submitConsigInline(cid, itens, grupo, produtosConsig, this);
+    });
+  }
+}
+
+// Atualizar preview em tempo real quando muda a qtd a devolver
+function _atualizarPreview(cid, idx, qtdOrig, jaDev) {
+  var input = document.getElementById(cid + '-qty-' + idx);
+  var devolvendo = input ? parseFloat(input.value) || 0 : 0;
+  var devnEl = document.getElementById(cid + '-devn-' + idx);
+  var ficaEl = document.getElementById(cid + '-fica-' + idx);
+  if (devnEl) devnEl.textContent = devolvendo;
+  if (ficaEl) ficaEl.textContent = qtdOrig - jaDev - devolvendo;
 }
 
 async function _submitConsigInline(cid, itens, grupo, produtosConsig, btn) {
   const itensDevolver = [];
-  itens.forEach(function (item, idx) {
+  let erroValidacao = '';
+  for (let idx = 0; idx < itens.length; idx++) {
+    const item = itens[idx];
     const input = document.getElementById(cid + '-qty-' + idx);
     const qtd = input ? parseFloat(input.value) || 0 : 0;
     if (qtd > 0) {
       if (qtd > (item.qtd_disponivel || 0)) {
-        throw new Error('Quantidade excede disponível para ' + item.produto);
+        erroValidacao = 'Quantidade excede disponível para ' + item.produto;
+        break;
       }
       itensDevolver.push({
         sku: item.sku,
@@ -2978,8 +3041,9 @@ async function _submitConsigInline(cid, itens, grupo, produtosConsig, btn) {
         qtd_devolvida: qtd,
       });
     }
-  });
+  }
 
+  if (erroValidacao) { toast(erroValidacao, 'err'); return; }
   if (!itensDevolver.length) { toast('Selecione ao menos 1 item para devolver', 'err'); return; }
 
   const primeiro = itens[0];
