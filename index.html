@@ -2751,7 +2751,7 @@ function abrirCorrecao(id, aba, dadosAtuais) {
     '  </div>' +
     '  <div class="modal-footer">' +
     '    <button class="btn" style="background:var(--bg);border:1.5px solid var(--bd);color:var(--ink2);border-radius:var(--rad3);cursor:pointer" onclick="fecharCorrecao()">Cancelar</button>' +
-    '    <button class="btn btn-primary" id="corr-btn-salvar">Salvar e Validar</button>' +
+    '    <button class="btn btn-primary" id="corr-btn-salvar">Salvar Correção</button>' +
     '  </div>' +
     '</div>';
 
@@ -2831,24 +2831,27 @@ async function submitCorrecao(id, aba) {
     }
   }
 
+  if (Object.keys(correcoes).length === 0) {
+    toast('Nenhuma alteração detectada', 'err');
+    return;
+  }
+
   const btn = document.getElementById('corr-btn-salvar');
   if (btn) { btn.disabled = true; btn.textContent = '⌛ Salvando...'; }
 
   try {
-    const payload = { id, aba, status: 'validado', validado_por: NOME };
-    if (Object.keys(correcoes).length > 0) {
-      payload.correcoes = correcoes;
-      payload.motivo = motivo;
-    }
-    await api('validar_pendencia', payload);
+    await api('corrigir_registro', {
+      id, aba,
+      campos: correcoes,
+      corrigido_por: NOME,
+      motivo: motivo,
+    });
     fecharCorrecao();
-    const card = document.getElementById('pc-' + id);
-    if (card) card.remove();
-    const corrMsg = Object.keys(correcoes).length > 0 ? ' + ' + Object.keys(correcoes).length + ' correção(ões)' : '';
-    toast('✓ Validado' + corrMsg, 'ok');
+    toast('✓ ' + Object.keys(correcoes).length + ' campo(s) corrigido(s)', 'ok');
+    // Recarregar para refletir as correções nos cards
     setTimeout(() => carregarPendencias('comercial'), 500);
   } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Salvar e Validar'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Salvar Correção'; }
     toast('Erro: ' + e.message, 'err');
   }
 }
@@ -2938,9 +2941,9 @@ function _renderDetalhesInline(cid, dados, grupo, produtosConsig) {
   // Itens do pedido com simulação de devolução
   html += '<div style="padding:0">';
   itens.forEach(function (item, idx) {
-    const disp = item.qtd_disponivel || 0;
-    const qtdOrig = item.qtd || 0;
-    const jaDev = item.qtd_ja_devolvida || 0;
+    const qtdAtual = item.qtd || 0;       // qtd atual no pedido (já editada se houve devoluções anteriores)
+    const disp = item.qtd_disponivel || 0; // = qtdAtual
+
     // Pre-preencher com a qtd do retorno se o SKU bate
     let preQtd = 0;
     if (disp > 0) {
@@ -2956,37 +2959,32 @@ function _renderDetalhesInline(cid, dados, grupo, produtosConsig) {
     if (disp > 0) {
       html += '    <input type="number" id="' + cid + '-qty-' + idx + '" min="0" max="' + disp + '" value="' + preQtd + '" ';
       html += '     style="width:52px;text-align:center;padding:5px;font-size:14px;font-weight:700;border:1.5px solid var(--b);border-radius:6px;color:var(--b)" ';
-      html += '     onchange="_atualizarPreview(\'' + cid + '\',' + idx + ',' + qtdOrig + ',' + jaDev + ')">';
+      html += '     onchange="_atualizarPreview(\'' + cid + '\',' + idx + ',' + qtdAtual + ',0)">';
     }
     html += '  </div>';
 
-    // Resumo visual: Pedido | Já devolvido | Devolvendo agora | Ficará com
-    html += '  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;text-align:center">';
-    // No pedido
-    html += '    <div style="background:var(--bg);border-radius:6px;padding:4px">';
-    html += '      <div style="font-size:9px;color:var(--ink3);font-weight:600">NO PEDIDO</div>';
-    html += '      <div style="font-size:15px;font-weight:700">' + qtdOrig + '</div>';
-    html += '    </div>';
-    // Já devolvido
-    html += '    <div style="background:' + (jaDev > 0 ? 'var(--a2)' : 'var(--bg)') + ';border-radius:6px;padding:4px">';
-    html += '      <div style="font-size:9px;color:var(--ink3);font-weight:600">JÁ DEVOL.</div>';
-    html += '      <div style="font-size:15px;font-weight:700;color:' + (jaDev > 0 ? 'var(--a)' : 'var(--ink4)') + '">' + jaDev + '</div>';
+    // Resumo visual: Qtd Atual | Devolvendo agora | Ficará com
+    html += '  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center">';
+    // Qtd atual no pedido
+    html += '    <div style="background:var(--bg);border-radius:6px;padding:6px 4px">';
+    html += '      <div style="font-size:9px;color:var(--ink3);font-weight:600">QTD ATUAL</div>';
+    html += '      <div style="font-size:16px;font-weight:700">' + qtdAtual + '</div>';
     html += '    </div>';
     // Devolvendo agora
-    html += '    <div style="background:var(--r2);border-radius:6px;padding:4px">';
+    html += '    <div style="background:var(--r2);border-radius:6px;padding:6px 4px">';
     html += '      <div style="font-size:9px;color:var(--ink3);font-weight:600">DEVOLVENDO</div>';
-    html += '      <div style="font-size:15px;font-weight:700;color:var(--r)" id="' + cid + '-devn-' + idx + '">' + preQtd + '</div>';
+    html += '      <div style="font-size:16px;font-weight:700;color:var(--r)" id="' + cid + '-devn-' + idx + '">' + preQtd + '</div>';
     html += '    </div>';
     // Ficará com
-    var ficaCom = qtdOrig - jaDev - preQtd;
-    html += '    <div style="background:var(--g2);border-radius:6px;padding:4px">';
+    var ficaCom = qtdAtual - preQtd;
+    html += '    <div style="background:var(--g2);border-radius:6px;padding:6px 4px">';
     html += '      <div style="font-size:9px;color:var(--ink3);font-weight:600">FICARÁ COM</div>';
-    html += '      <div style="font-size:15px;font-weight:700;color:var(--g)" id="' + cid + '-fica-' + idx + '">' + ficaCom + '</div>';
+    html += '      <div style="font-size:16px;font-weight:700;color:var(--g)" id="' + cid + '-fica-' + idx + '">' + ficaCom + '</div>';
     html += '    </div>';
     html += '  </div>';
 
-    if (disp <= 0 && qtdOrig > 0) {
-      html += '  <div style="font-size:10px;color:var(--ink4);text-align:center;margin-top:4px">Já totalmente devolvido</div>';
+    if (disp <= 0) {
+      html += '  <div style="font-size:10px;color:var(--ink4);text-align:center;margin-top:4px">Sem quantidade disponível para devolução</div>';
     }
     html += '</div>';
   });
@@ -2995,7 +2993,7 @@ function _renderDetalhesInline(cid, dados, grupo, produtosConsig) {
   // Botão confirmar
   html += '<div style="padding:10px 12px;border-top:1px solid var(--bd);display:flex;flex-direction:column;gap:6px">';
   html += '  <button class="btn btn-primary" id="' + cid + '-btn-confirm" style="width:100%;font-size:14px;padding:11px">✓ Confirmar Devolução e Validar</button>';
-  html += '  <div style="font-size:10px;color:var(--ink3);text-align:center">Ajusta a venda (linha negativa) + valida os registros pendentes</div>';
+  html += '  <div style="font-size:10px;color:var(--ink3);text-align:center">Ajusta o pedido de venda + valida os registros pendentes</div>';
   html += '</div>';
 
   html += '</div>';
@@ -3050,7 +3048,7 @@ async function _submitConsigInline(cid, itens, grupo, produtosConsig, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '⌛ Processando devolução...'; }
 
   try {
-    // 1. Registrar devolução (ajuste negativo em Vendas + entrada no Estoque)
+    // 1. Ajustar pedido de venda (edita qtd/litros/valor diretamente na linha)
     const r = await api('devolucao_consignado', {
       pedido: primeiro.pedido,
       cliente: primeiro.cliente,
@@ -3063,6 +3061,7 @@ async function _submitConsigInline(cid, itens, grupo, produtosConsig, btn) {
     if (btn) btn.textContent = '⌛ Validando registros...';
 
     // 2. Validar todos os registros pendentes do grupo (barris + produtos)
+    //    Apenas muda status para 'validado' — estoque já foi registrado pelo motorista/pátio
     let confirmados = 0;
     for (const reg of grupo.registros) {
       const isRet = reg.qtd !== undefined && reg.qtd_entrada === undefined;
