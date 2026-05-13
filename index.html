@@ -485,6 +485,9 @@ if (document.readyState === 'loading') {
       <div class="inner-tab" id="com-tab-trocas" onclick="comercialAba('trocas')">
         🔄 Trocas <span class="tab-badge" id="com-badge-trocas" style="display:none">0</span>
       </div>
+      <div class="inner-tab" id="com-tab-consig" onclick="comercialAba('consig')">
+        📦 Consignados
+      </div>
     </div>
 
     <div class="content" style="padding-top:12px">
@@ -514,6 +517,32 @@ if (document.readyState === 'loading') {
         </div>
         <div id="dash-trocas" style="margin-bottom:10px"></div>
         <div id="lista-trocas"></div>
+      </div>
+
+      <!-- Painel Consignados (Devolução) -->
+      <div class="inner-panel" id="com-panel-consig">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="slabel" style="margin:0">Devolução de Consignado</div>
+        </div>
+
+        <!-- Busca -->
+        <div id="consig-busca" class="card" style="padding:14px;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--tx)">Buscar pedido para devolução</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <input type="text" id="consig-pedido" placeholder="Nº do Pedido" style="flex:1;font-size:14px;padding:10px 12px;border:2px solid var(--bd);border-radius:8px;background:var(--bg)">
+            <span style="align-self:center;font-size:11px;color:var(--g);font-weight:600">OU</span>
+          </div>
+          <div class="ac-wrap" style="margin-bottom:10px">
+            <input type="text" id="consig-cliente" placeholder="Nome do cliente..." autocomplete="off" style="width:100%;font-size:14px;padding:10px 12px;border:2px solid var(--bd);border-radius:8px;background:var(--bg);box-sizing:border-box">
+          </div>
+          <button class="btn btn-primary" onclick="buscarConsignado()" style="width:100%;padding:12px;font-size:14px;border-radius:8px">🔍 Buscar</button>
+        </div>
+
+        <!-- Resultado: lista de pedidos (busca por cliente) -->
+        <div id="consig-pedidos" style="display:none"></div>
+
+        <!-- Resultado: detalhe do pedido (itens) -->
+        <div id="consig-detalhe" style="display:none"></div>
       </div>
 
     </div>
@@ -758,13 +787,12 @@ function _ativarPapel(papel, nome) {
 }
 
 function comercialAba(aba) {
-  document.getElementById('com-tab-dist').classList.toggle('active', aba === 'dist');
-  document.getElementById('com-tab-pdv').classList.toggle('active', aba === 'pdv');
-  document.getElementById('com-tab-trocas').classList.toggle('active', aba === 'trocas');
-  document.getElementById('com-panel-dist').classList.toggle('active', aba === 'dist');
-  document.getElementById('com-panel-pdv').classList.toggle('active', aba === 'pdv');
-  document.getElementById('com-panel-trocas').classList.toggle('active', aba === 'trocas');
+  ['dist','pdv','trocas','consig'].forEach(function(t) {
+    document.getElementById('com-tab-'+t).classList.toggle('active', aba === t);
+    document.getElementById('com-panel-'+t).classList.toggle('active', aba === t);
+  });
   if (aba === 'trocas') carregarTrocas();
+  if (aba === 'consig') initConsigAC();
 }
 
 function patioAba(aba) {
@@ -3062,14 +3090,15 @@ function _renderTrocaCard(t, cfg, statusAtual) {
   // === Rodapé com ações ===
   if (statusAtual === 'pronto') {
     // Layout especial para "pronto": campo nº pedido em destaque + botões
-    html += '<div style="padding:8px 12px;border-top:1px solid var(--bd);background:var(--g2)">';
-    html += '  <div style="font-size:10px;font-weight:600;color:var(--g);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Entregar ao cliente</div>';
-    html += '  <div style="display:flex;gap:6px;align-items:center">';
-    html += '    <input type="text" id="ped-troca-' + t.id + '" placeholder="Nº do pedido de troca" style="flex:1;font-size:13px;padding:8px 10px;border:1.5px solid var(--g3);border-radius:8px;background:var(--bg)">';
-    html += '    <button class="btn btn-primary troca-acao-btn" data-id="' + t.id + '" data-proximo="entregue" style="font-size:12px;padding:8px 14px;white-space:nowrap">✓ Entregue</button>';
+    html += '<div style="padding:10px 12px;border-top:1px solid var(--bd);background:var(--g2)">';
+    html += '  <div style="font-size:10px;font-weight:600;color:var(--g);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">Entregar ao cliente</div>';
+    html += '  <div style="margin-bottom:10px">';
+    html += '    <label style="display:block;font-size:11px;font-weight:600;color:var(--ink3);margin-bottom:4px">Nº do pedido de troca</label>';
+    html += '    <input type="text" id="ped-troca-' + t.id + '" placeholder="Ex: 12345" style="display:block;width:100%;font-size:15px;padding:12px 14px;border:2px solid var(--g);border-radius:8px;background:#fff;box-sizing:border-box;outline:none">';
     html += '  </div>';
-    html += '  <div style="margin-top:6px;text-align:right">';
-    html += '    <button class="troca-sec-btn" data-id="' + t.id + '" data-acao="nao_aprovado" style="font-size:10px;padding:3px 8px;background:transparent;color:var(--r);border:none;cursor:pointer;font-weight:500;text-decoration:underline">Não aprovado</button>';
+    html += '  <div style="display:flex;align-items:center;gap:10px">';
+    html += '    <button class="troca-sec-btn" data-id="' + t.id + '" data-acao="nao_aprovado" style="font-size:11px;padding:8px 12px;background:transparent;color:var(--r);border:1.5px solid var(--r);border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap">✕ Não aprovado</button>';
+    html += '    <button class="troca-acao-btn" data-id="' + t.id + '" data-proximo="entregue" style="flex:1;font-size:13px;padding:10px 18px;background:var(--g);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap">✓ Entregue</button>';
     html += '  </div>';
     html += '</div>';
   } else if (cfg.acao) {
