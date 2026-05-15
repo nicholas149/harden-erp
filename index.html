@@ -512,7 +512,6 @@ if (document.readyState === 'loading') {
           <div class="slabel" style="margin:0">Controle de Trocas</div>
           <span onclick="carregarTrocas()" style="font-size:11px;color:var(--g);cursor:pointer;font-weight:500">↻ Atualizar</span>
         </div>
-        <div id="dash-trocas" style="margin-bottom:10px"></div>
         <!-- Sub-abas internas das trocas -->
         <div class="inner-tabs" style="margin-bottom:8px">
           <div class="inner-tab active" id="troca-tab-triagem" onclick="trocaSubAba('triagem')">
@@ -1456,11 +1455,20 @@ function addItem(containerId, comPreco=false) {
     ${['itens-rm','itens-rp'].includes(containerId) ? `
     <div class="troca-row">
       <label class="troca-label">
-        <input type="checkbox" id="ip-troca-${n}" class="troca-chk" onchange="document.getElementById('ip-val-troca-${n}').style.display=this.checked?'':'none'" style="position:absolute;opacity:0;width:0;height:0">
+        <input type="checkbox" id="ip-troca-${n}" class="troca-chk" onchange="document.getElementById('troca-fields-${n}').style.display=this.checked?'':'none'" style="position:absolute;opacity:0;width:0;height:0">
         <span class="troca-tick"></span>
         <span class="troca-lbl-txt">🔄 Troca?</span>
       </label>
-      <input type="date" id="ip-val-troca-${n}" placeholder="Validade" style="display:none;font-size:.82rem;padding:5px 10px;border:1.5px solid var(--bd);border-radius:6px">
+      <div id="troca-fields-${n}" style="display:none;margin-top:6px;padding:8px;background:var(--a2);border-radius:8px;border:1px solid var(--bd)">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+          <label style="font-size:11px;font-weight:600;color:var(--ink3);white-space:nowrap">Validade</label>
+          <input type="date" id="ip-val-troca-${n}" style="flex:1;font-size:.82rem;padding:5px 10px;border:1.5px solid var(--bd);border-radius:6px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--ink3);display:block;margin-bottom:3px">Motivo da troca</label>
+          <input type="text" id="ip-motivo-troca-${n}" placeholder="Ex: produto vencido, barril amassado..." style="width:100%;font-size:.82rem;padding:6px 10px;border:1.5px solid var(--bd);border-radius:6px;box-sizing:border-box">
+        </div>
+      </div>
     </div>` : ''}`;
   cnt.appendChild(d);
   criarAC(document.getElementById('ip-sku-'+n), q=>opsProd(q), opt=>{
@@ -1488,7 +1496,8 @@ function coletarItens(containerId, comPreco=false) {
     const preco = comPreco ? parseFloat(document.getElementById('ip-preco-'+n)?.value)||0 : 0;
     const troca = document.getElementById('ip-troca-'+n)?.checked || false;
     const validadeTroca = troca ? (document.getElementById('ip-val-troca-'+n)?.value||'').trim() : '';
-    if ((sku||nome) && qtd>0) items.push({sku, nome, qtd, troca, validade_troca: validadeTroca, ...(comPreco&&{preco_unitario:preco, valor_total:qtd*preco})});
+    const motivoTroca = troca ? (document.getElementById('ip-motivo-troca-'+n)?.value||'').trim() : '';
+    if ((sku||nome) && qtd>0) items.push({sku, nome, qtd, troca, validade_troca: validadeTroca, motivo_troca: motivoTroca, ...(comPreco&&{preco_unitario:preco, valor_total:qtd*preco})});
   });
   return items;
 }
@@ -1585,7 +1594,7 @@ async function submitRetornoMotorista() {
     await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,
     cliente:cliente, cliente_id:cliId,
     empresa, registrado_por:NOME, origem_registro:'motorista', obs,
-    tipo_troca:it.troca, validade_troca:it.validade_troca});
+    tipo_troca:it.troca, validade_troca:it.validade_troca, motivo_troca:it.motivo_troca});
   }
   toast('✓ Retorno registrado — aguarda validação do pátio','ok');
   voltarForm();
@@ -1606,7 +1615,7 @@ async function submitRetornoPatio() {
     await api('entrada_retornavel',{sku:it.sku,qtd:it.qtd,
     cliente:cliente, cliente_id:cliId,
     empresa, registrado_por:NOME, origem_registro:'patio_distribuidor', obs,
-    tipo_troca:it.troca, validade_troca:it.validade_troca});
+    tipo_troca:it.troca, validade_troca:it.validade_troca, motivo_troca:it.motivo_troca});
   }
   toast('✓ Entrada registrada — aguarda validação do comercial','ok');
   voltarForm();
@@ -2974,50 +2983,8 @@ const TROCA_CACHE = new Map();
 
 async function carregarTrocas() {
   try {
-    const [dashRes, listRes] = await Promise.all([
-      apiGet('dash_trocas'),
-      apiGet('trocas'),
-    ]);
-    const dash = dashRes.dados || dashRes || {};
+    const listRes = await apiGet('trocas');
     const trocas = listRes.dados || listRes || [];
-
-    // ── Dashboard resumo ──
-    const dashEl = document.getElementById('dash-trocas');
-    if (dashEl) {
-      var dh = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">';
-      var dashItems = [
-        { k: 'triagem',     label: 'Triagem',       cor: 'var(--a)',  bg: 'var(--a2)' },
-        { k: '_fabrica',    label: 'Fábrica',        cor: '#7c3aed',   bg: '#f3e8ff' },
-        { k: 'cliente_pendente', label: 'Cliente pend.', cor: 'var(--b)', bg: 'var(--b2)' },
-      ];
-      var fabTotal = (dash.fabrica_aguardando||0) + (dash.fabrica_solicitado||0) + (dash.fabrica_enviado||0);
-      dashItems.forEach(function(di) {
-        var qtd = di.k === '_fabrica' ? fabTotal : (dash[di.k] || 0);
-        dh += '<div style="background:'+di.bg+';border-radius:var(--rad2);padding:8px 6px;text-align:center">' +
-          '<div style="font-size:18px;font-weight:700;color:'+di.cor+'">'+qtd+'</div>' +
-          '<div style="font-size:9px;font-weight:600;color:var(--ink3);text-transform:uppercase">'+di.label+'</div></div>';
-      });
-      dh += '</div>';
-      var sec = [
-        { k: 'fabrica_recebido', label: 'Recebido',    cor: 'var(--g)', bg: 'var(--g2)' },
-        { k: 'cliente_efetuada', label: 'Efetuada',     cor: 'var(--g)', bg: 'var(--g2)' },
-        { k: 'uso_interno',      label: 'Uso interno',  cor: 'var(--b)', bg: 'var(--b2)' },
-        { k: 'nao_autorizada',   label: 'Não autoriz.', cor: 'var(--r)', bg: '#fef2f2' },
-      ];
-      var temSec = sec.some(function(s) { return (dash[s.k]||0) > 0; });
-      if (temSec) {
-        dh += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-top:4px">';
-        sec.forEach(function(s) {
-          var q = dash[s.k] || 0;
-          if (!q) { dh += '<div></div>'; return; }
-          dh += '<div style="background:'+s.bg+';border-radius:var(--rad2);padding:4px;text-align:center">' +
-            '<div style="font-size:13px;font-weight:700;color:'+s.cor+'">'+q+'</div>' +
-            '<div style="font-size:8px;font-weight:600;color:var(--ink3);text-transform:uppercase">'+s.label+'</div></div>';
-        });
-        dh += '</div>';
-      }
-      dashEl.innerHTML = dh;
-    }
 
     // ── Separar trocas por seção ──
     var todas = trocas.filter(function(t) {
@@ -3136,6 +3103,13 @@ function _trocaCardBody(t, corQtd) {
 function _renderTrocaTriagem(t) {
   var h = '<div style="background:var(--card);border-radius:var(--rad2);border:1px solid var(--bd);margin-bottom:6px;overflow:hidden" id="troca-' + t.id + '">';
   h += _trocaCardBody(t, 'var(--a)');
+  // Motivo inicial (informado pelo motorista/pátio)
+  if (t.motivo_inicial) {
+    h += '<div style="padding:4px 12px 8px;display:flex;align-items:flex-start;gap:6px">';
+    h += '  <span style="font-size:10px;font-weight:700;color:var(--ink3);white-space:nowrap">Motivo:</span>';
+    h += '  <span style="font-size:11px;color:var(--ink2)">' + t.motivo_inicial + '</span>';
+    h += '</div>';
+  }
   // Footer: triagem — select destino + obs + botões
   h += '<div style="padding:10px 12px;border-top:1px solid var(--bd);background:var(--a2)">';
   h += '  <div style="font-size:10px;font-weight:600;color:var(--a);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">Triagem — definir destino</div>';
@@ -3171,6 +3145,11 @@ function _renderTrocaFabrica(t) {
 
   var h = '<div style="background:var(--card);border-radius:var(--rad2);border:1px solid var(--bd);margin-bottom:6px;overflow:hidden" id="troca-' + t.id + '">';
   h += _trocaCardBody(t, etapaCfg.cor);
+
+  // Motivo inicial
+  if (t.motivo_inicial) {
+    h += '<div style="padding:2px 12px 4px"><span style="font-size:10px;font-weight:700;color:var(--ink3)">Motivo: </span><span style="font-size:10px;color:var(--ink4)">' + t.motivo_inicial + '</span></div>';
+  }
 
   // Badges: destino + etapa + status cliente
   h += '<div style="padding:4px 12px;display:flex;flex-wrap:wrap;gap:4px">';
@@ -3230,6 +3209,10 @@ function _renderTrocaEntrega(t) {
 
   var h = '<div style="background:var(--card);border-radius:var(--rad2);border:1px solid var(--bd);margin-bottom:6px;overflow:hidden" id="troca-' + t.id + '">';
   h += _trocaCardBody(t, 'var(--g)');
+  // Motivo inicial
+  if (t.motivo_inicial) {
+    h += '<div style="padding:2px 12px 4px"><span style="font-size:10px;font-weight:700;color:var(--ink3)">Motivo: </span><span style="font-size:10px;color:var(--ink4)">' + t.motivo_inicial + '</span></div>';
+  }
   // Badges
   h += '<div style="padding:4px 12px;display:flex;flex-wrap:wrap;gap:4px">';
   h += '  <span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;background:' + dstCfg.bg + ';color:' + dstCfg.cor + '">' + dstCfg.icon + ' ' + dstCfg.label + '</span>';
