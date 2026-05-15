@@ -2972,9 +2972,8 @@ const TROCA_DESTINO = {
   nao_autorizada:  { label: 'Não autorizada',     cor: 'var(--r)',  bg: '#fef2f2',   icon: '✗' },
 };
 const TROCA_ETAPA_FABRICA = {
-  aguardando_envio: { label: 'Aguard. envio',  cor: 'var(--a)', bg: 'var(--a2)', icon: '📦', acao: 'Marcar como solicitado',   proximo: 'solicitado' },
-  solicitado:       { label: 'Solicitado',      cor: '#7c3aed',  bg: '#f3e8ff',   icon: '📋', acao: 'Marcar como enviado',      proximo: 'enviado' },
-  enviado:          { label: 'Enviado',         cor: 'var(--b)', bg: 'var(--b2)', icon: '🚚', acao: 'Marcar como recebido',     proximo: 'recebido' },
+  aguardando_envio: { label: 'Aguard. envio',  cor: 'var(--a)', bg: 'var(--a2)', icon: '📦', acao: 'Marcar como enviado',   proximo: 'enviado' },
+  enviado:          { label: 'Enviado',         cor: 'var(--b)', bg: 'var(--b2)', icon: '🚚', acao: 'Marcar como recebido',  proximo: 'recebido' },
   recebido:         { label: 'Recebido',        cor: 'var(--g)', bg: 'var(--g2)', icon: '✅', acao: null, proximo: null },
 };
 
@@ -3169,12 +3168,6 @@ function _renderTrocaFabrica(t) {
 
   // Ação de avançar etapa fábrica
   if (etapaCfg.acao) {
-    // Obs para solicitado (obrigatório em problema_barril)
-    if (etapaCfg.proximo === 'solicitado') {
-      h += '<div style="margin-bottom:6px">';
-      h += '  <textarea id="fab-obs-' + t.id + '" placeholder="' + (dst === 'problema_barril' ? 'Como foi solicitado? (email, NF, chamado...) *' : 'Observação (opcional)') + '" style="display:block;width:100%;padding:6px 8px;font-size:11px;border:1.5px solid var(--bd);border-radius:6px;resize:none;height:36px;box-sizing:border-box;font-family:inherit"></textarea>';
-      h += '</div>';
-    }
     h += '<div style="display:flex;gap:8px;align-items:center">';
     h += '  <button class="troca-fabrica-btn" data-id="' + t.id + '" data-etapa="' + etapaCfg.proximo + '" data-dst="' + dst + '" style="flex:1;padding:8px;font-size:12px;font-weight:600;background:' + etapaCfg.cor + ';color:#fff;border:none;border-radius:8px;cursor:pointer">' + etapaCfg.acao + '</button>';
     h += '</div>';
@@ -3329,25 +3322,15 @@ async function _submitEtapaFabrica(id, etapa, dst, btn) {
   var obsEl = document.getElementById('fab-obs-' + id);
   var obs = obsEl ? obsEl.value.trim() : '';
 
-  // obs obrigatória para problema_barril → solicitado
-  if (etapa === 'solicitado' && dst === 'problema_barril' && !obs) {
-    toast('Informe como foi solicitado à fábrica', 'err');
-    return;
-  }
-
   var cached = TROCA_CACHE.get(id);
   var payload = { id: id, etapa_fabrica: etapa, atualizado_por: NOME };
-  if (obs) {
-    payload.obs = obs;
-    payload.obs_anterior = cached ? (cached.obs_validacao || '') : '';
-  }
 
   btn.disabled = true; btn.textContent = '⌛...';
   try {
     await api('avancar_etapa_fabrica', payload);
     var card = document.getElementById('troca-' + id);
     if (card) { card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; }
-    var labels = { solicitado: 'Solicitado à fábrica', enviado: 'Enviado para fábrica', recebido: 'Recebido da fábrica' };
+    var labels = { enviado: 'Enviado para fábrica', recebido: 'Recebido da fábrica' };
     toast('✓ ' + (labels[etapa] || etapa), 'ok');
     setTimeout(carregarTrocas, 600);
   } catch (e) {
