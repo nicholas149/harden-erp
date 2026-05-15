@@ -485,6 +485,9 @@ if (document.readyState === 'loading') {
       <div class="inner-tab" id="com-tab-trocas" onclick="comercialAba('trocas')">
         🔄 Trocas <span class="tab-badge" id="com-badge-trocas" style="display:none">0</span>
       </div>
+      <div class="inner-tab" id="com-tab-consig" onclick="comercialAba('consig')">
+        📦 Consignados
+      </div>
     </div>
 
     <div class="content" style="padding-top:12px">
@@ -514,6 +517,32 @@ if (document.readyState === 'loading') {
         </div>
         <div id="dash-trocas" style="margin-bottom:10px"></div>
         <div id="lista-trocas"></div>
+      </div>
+
+      <!-- Painel Consignados (Devolução) -->
+      <div class="inner-panel" id="com-panel-consig">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="slabel" style="margin:0">Devolução de Consignado</div>
+        </div>
+
+        <!-- Busca -->
+        <div id="consig-busca" class="card" style="padding:14px;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--tx)">Buscar pedido para devolução</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <input type="text" id="consig-pedido" placeholder="Nº do Pedido" style="flex:1;font-size:14px;padding:10px 12px;border:2px solid var(--bd);border-radius:8px;background:var(--bg)">
+            <span style="align-self:center;font-size:11px;color:var(--g);font-weight:600">OU</span>
+          </div>
+          <div class="ac-wrap" style="margin-bottom:10px">
+            <input type="text" id="consig-cliente" placeholder="Nome do cliente..." autocomplete="off" style="width:100%;font-size:14px;padding:10px 12px;border:2px solid var(--bd);border-radius:8px;background:var(--bg);box-sizing:border-box">
+          </div>
+          <button class="btn btn-primary" onclick="buscarConsignado()" style="width:100%;padding:12px;font-size:14px;border-radius:8px">🔍 Buscar</button>
+        </div>
+
+        <!-- Resultado: lista de pedidos (busca por cliente) -->
+        <div id="consig-pedidos" style="display:none"></div>
+
+        <!-- Resultado: detalhe do pedido (itens) -->
+        <div id="consig-detalhe" style="display:none"></div>
       </div>
 
     </div>
@@ -1812,18 +1841,19 @@ async function carregarPendencias(papel) {
     let pends = [];
 
     if (papel === 'patio') {
-      // PÁTIO vê: retornos de motoristas com etapa=patio
+      // PÁTIO vê: retornos pendentes com etapa=patio (após confirmar, etapa muda para 'comercial' e some daqui)
       const retMotorista = retTodos.filter(p => {
         const etapa = String(p.etapa||'').toLowerCase().trim();
-        const orig  = String(p.origem_registro||'').toLowerCase().trim();
-        const val   = String(p.validador||'').toLowerCase().trim();
-        return etapa === 'patio' || orig === 'motorista' || val === 'patio';
+        return etapa === 'patio';
       });
 
-      // Estoque pendentes que estão vinculados via op_id (produtos consignados devolvidos)
+      // Estoque pendentes vinculados via op_id aos retornáveis do pátio
+      const opIdsPatio = new Set(retMotorista.map(r => String(r.op_id||'')).filter(Boolean));
       const estPatio = estTodos.filter(m => {
         const tipo = String(m.tipo_mov||'').toLowerCase();
-        return tipo.includes('ajuste +') || tipo.includes('ajuste pos') || tipo.includes('entrada troca');
+        const opId = String(m.op_id||'');
+        return (tipo.includes('ajuste +') || tipo.includes('ajuste pos') || tipo.includes('entrada troca'))
+          && opId && opIdsPatio.has(opId);
       });
 
       // Deduplicar: se Retornável e Estoque compartilham op_id,
