@@ -2929,14 +2929,23 @@ async function submitCorrecao(id, aba) {
 // v2: COMERCIAL — Painel de Trocas
 // ══════════════════════════════════════════════════════════════
 
-const TROCA_STATUS = {
-  pendente:        { label: 'Aguardando envio', cor: 'var(--a)',    bg: 'var(--a2)', icon: '⏳', acao: 'Enviado p/ Fábrica', proximo: 'enviado_fabrica' },
-  enviado_fabrica: { label: 'Na fábrica',       cor: 'var(--b)',    bg: 'var(--b2)', icon: '🏭', acao: 'Retornou da Fábrica', proximo: 'pronto' },
-  pronto:          { label: 'Pronto p/ entrega', cor: 'var(--g)',   bg: 'var(--g2)', icon: '✅', acao: 'Entregue ao Cliente',  proximo: 'entregue' },
-  entregue:        { label: 'Entregue',          cor: 'var(--ink3)',bg: 'var(--bg)', icon: '✓',  acao: null, proximo: null },
-  nao_aprovado:    { label: 'Não aprovado',      cor: 'var(--r)',   bg: '#fef2f2',   icon: '✗',  acao: null, proximo: null },
-  uso_interno:     { label: 'Uso interno',       cor: 'var(--b)',   bg: 'var(--b2)', icon: '🏠', acao: null, proximo: null },
+// ── Configurações visuais por destino / etapa ──
+const TROCA_DESTINO = {
+  pendente:        { label: 'Aguardando triagem', cor: 'var(--a)',  bg: 'var(--a2)', icon: '⏳' },
+  fabrica:         { label: 'Fábrica',            cor: '#7c3aed',  bg: '#f3e8ff',   icon: '🏭' },
+  problema_barril: { label: 'Problema barril',    cor: '#d97706',  bg: '#fef3c7',   icon: '⚠️' },
+  uso_interno:     { label: 'Uso interno',        cor: 'var(--b)',  bg: 'var(--b2)', icon: '🏠' },
+  nao_autorizada:  { label: 'Não autorizada',     cor: 'var(--r)',  bg: '#fef2f2',   icon: '✗' },
 };
+const TROCA_ETAPA_FABRICA = {
+  aguardando_envio: { label: 'Aguard. envio',  cor: 'var(--a)', bg: 'var(--a2)', icon: '📦', acao: 'Marcar como solicitado',   proximo: 'solicitado' },
+  solicitado:       { label: 'Solicitado',      cor: '#7c3aed',  bg: '#f3e8ff',   icon: '📋', acao: 'Marcar como enviado',      proximo: 'enviado' },
+  enviado:          { label: 'Enviado',         cor: 'var(--b)', bg: 'var(--b2)', icon: '🚚', acao: 'Marcar como recebido',     proximo: 'recebido' },
+  recebido:         { label: 'Recebido',        cor: 'var(--g)', bg: 'var(--g2)', icon: '✅', acao: null, proximo: null },
+};
+
+// Cache de dados para ações inline
+const TROCA_CACHE = new Map();
 
 async function carregarTrocas() {
   try {
@@ -2947,88 +2956,129 @@ async function carregarTrocas() {
     const dash = dashRes.dados || dashRes || {};
     const trocas = listRes.dados || listRes || [];
 
-    // Dashboard resumo
+    // ── Dashboard resumo ──
     const dashEl = document.getElementById('dash-trocas');
     if (dashEl) {
-      dashEl.innerHTML =
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">' +
-        ['pendente','enviado_fabrica','pronto','entregue'].map(function(st) {
-          var cfg = TROCA_STATUS[st];
-          var qtd = dash[st] || 0;
-          return '<div style="background:' + cfg.bg + ';border-radius:var(--rad2);padding:8px 6px;text-align:center">' +
-            '<div style="font-size:18px;font-weight:700;color:' + cfg.cor + '">' + qtd + '</div>' +
-            '<div style="font-size:9px;font-weight:600;color:var(--ink3);text-transform:uppercase">' + cfg.label + '</div>' +
-          '</div>';
-        }).join('') +
-        '</div>' +
-        ((dash.nao_aprovado||0) + (dash.uso_interno||0) > 0 ?
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px">' +
-          ['nao_aprovado','uso_interno'].map(function(st) {
-            var cfg = TROCA_STATUS[st];
-            var qtd = dash[st] || 0;
-            if (!qtd) return '';
-            return '<div style="background:' + cfg.bg + ';border-radius:var(--rad2);padding:6px;text-align:center">' +
-              '<div style="font-size:14px;font-weight:700;color:' + cfg.cor + '">' + qtd + '</div>' +
-              '<div style="font-size:9px;font-weight:600;color:var(--ink3);text-transform:uppercase">' + cfg.label + '</div>' +
-            '</div>';
-          }).join('') +
-          '</div>'
-        : '');
+      var dh = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">';
+      var dashItems = [
+        { k: 'triagem',     label: 'Triagem',    cor: 'var(--a)',  bg: 'var(--a2)' },
+        { k: '_fabrica',    label: 'Fábrica',     cor: '#7c3aed',   bg: '#f3e8ff' },
+        { k: 'cliente_pendente', label: 'Cliente pend.', cor: 'var(--b)', bg: 'var(--b2)' },
+      ];
+      var fabTotal = (dash.fabrica_aguardando||0) + (dash.fabrica_solicitado||0) + (dash.fabrica_enviado||0);
+      dashItems.forEach(function(di) {
+        var qtd = di.k === '_fabrica' ? fabTotal : (dash[di.k] || 0);
+        dh += '<div style="background:'+di.bg+';border-radius:var(--rad2);padding:8px 6px;text-align:center">' +
+          '<div style="font-size:18px;font-weight:700;color:'+di.cor+'">'+qtd+'</div>' +
+          '<div style="font-size:9px;font-weight:600;color:var(--ink3);text-transform:uppercase">'+di.label+'</div></div>';
+      });
+      dh += '</div>';
+      // Linha secundária: recebido, efetuada, uso_interno, nao_autorizada
+      var sec = [
+        { k: 'fabrica_recebido', label: 'Recebido',    cor: 'var(--g)', bg: 'var(--g2)' },
+        { k: 'cliente_efetuada', label: 'Efetuada',     cor: 'var(--g)', bg: 'var(--g2)' },
+        { k: 'uso_interno',      label: 'Uso interno',  cor: 'var(--b)', bg: 'var(--b2)' },
+        { k: 'nao_autorizada',   label: 'Não autoriz.', cor: 'var(--r)', bg: '#fef2f2' },
+      ];
+      var temSec = sec.some(function(s) { return (dash[s.k]||0) > 0; });
+      if (temSec) {
+        dh += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-top:4px">';
+        sec.forEach(function(s) {
+          var q = dash[s.k] || 0;
+          if (!q) { dh += '<div></div>'; return; }
+          dh += '<div style="background:'+s.bg+';border-radius:var(--rad2);padding:4px;text-align:center">' +
+            '<div style="font-size:13px;font-weight:700;color:'+s.cor+'">'+q+'</div>' +
+            '<div style="font-size:8px;font-weight:600;color:var(--ink3);text-transform:uppercase">'+s.label+'</div></div>';
+        });
+        dh += '</div>';
+      }
+      dashEl.innerHTML = dh;
     }
 
-    // Lista de trocas agrupadas por status
+    // ── Lista de trocas ──
     const listaEl = document.getElementById('lista-trocas');
     if (!listaEl) return;
 
-    // Filtrar: mostrar tudo exceto finalizados, e só se estoque já validado
-    const FINAIS = ['entregue', 'nao_aprovado', 'uso_interno'];
-    const ativas = trocas.filter(function(t) {
-      if (FINAIS.indexOf(String(t.status||'')) >= 0) return false;
-      // Só exibir se o estoque vinculado já foi validado
+    // Só exibir se estoque vinculado já validado
+    const todas = trocas.filter(function(t) {
       if (String(t.status_estoque||'').toLowerCase() !== 'validado') return false;
       return true;
     });
 
-    // Badge (baseado nas ativas/validadas)
-    const badge = document.getElementById('com-badge-trocas');
-    if (badge) { badge.textContent = ativas.length; badge.style.display = ativas.length > 0 ? '' : 'none'; }
+    // Separar por seção
+    var triagem = [];
+    var fabricaAtivas = [];
+    var clientePendente = [];
+    var finalizados = [];
 
-    if (!ativas.length) {
-      listaEl.innerHTML = '<div class="empty"><div class="empty-icon">🔄</div><div class="empty-txt">Nenhuma troca pendente</div></div>';
+    todas.forEach(function(t) {
+      var dst = String(t.destino||'').toLowerCase();
+      var ef  = String(t.etapa_fabrica||'').toLowerCase();
+      var sc  = String(t.status_cliente||'').toLowerCase();
+      TROCA_CACHE.set(t.id, t);
+
+      if (dst === 'pendente') { triagem.push(t); return; }
+      if (dst === 'nao_autorizada') { finalizados.push(t); return; }
+      if (dst === 'uso_interno') { finalizados.push(t); return; }
+
+      // fábrica ou problema_barril
+      if (ef && ef !== 'recebido') { fabricaAtivas.push(t); }
+      else if (ef === 'recebido' && sc === 'efetuada') { finalizados.push(t); }
+      else if (ef === 'recebido') { clientePendente.push(t); }
+      else { fabricaAtivas.push(t); }
+
+      // cliente pendente (sem fábrica recebida, mas com destino definido)
+      if (sc === 'pendente' && dst !== 'pendente' && dst !== 'nao_autorizada' && ef !== 'recebido') {
+        // já está em fabricaAtivas, mostrará badge de cliente pendente
+      }
+    });
+
+    // Badge = triagem + fábrica ativas + cliente pendente
+    var badgeCount = triagem.length + fabricaAtivas.length + clientePendente.length;
+    const badge = document.getElementById('com-badge-trocas');
+    if (badge) { badge.textContent = badgeCount; badge.style.display = badgeCount > 0 ? '' : 'none'; }
+
+    if (!badgeCount && !finalizados.length) {
+      listaEl.innerHTML = '<div class="empty"><div class="empty-icon">🔄</div><div class="empty-txt">Nenhuma troca registrada</div></div>';
       return;
     }
 
-    let html = '';
-    ['pendente','enviado_fabrica','pronto'].forEach(function(st) {
-      const grupo = ativas.filter(function(t) { return String(t.status||'') === st; });
-      if (!grupo.length) return;
-      const cfg = TROCA_STATUS[st];
-      html += '<div style="margin-top:10px">';
-      html += '<div style="font-size:11px;font-weight:700;color:' + cfg.cor + ';text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">' + cfg.icon + ' ' + cfg.label + ' (' + grupo.length + ')</div>';
-      grupo.forEach(function(t) { html += _renderTrocaCard(t, cfg, st); });
-      html += '</div>';
-    });
-    listaEl.innerHTML = html;
+    var html = '';
 
-    // Bind botões de ação principal
-    listaEl.querySelectorAll('.troca-acao-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        _avancarTroca(btn.dataset.id, btn.dataset.proximo, btn);
-      });
-    });
-    // Bind botões de ação secundária
-    listaEl.querySelectorAll('.troca-sec-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var id = btn.dataset.id;
-        var acao = btn.dataset.acao;
-        if (acao === 'uso_interno') {
-          if (!confirm('Converter em uso interno?\nIsso criará uma entrada de estoque (Ajuste +) com esse produto.')) return;
-        } else if (acao === 'nao_aprovado') {
-          if (!confirm('Marcar como não aprovado pela fábrica?')) return;
-        }
-        _avancarTroca(id, acao, btn);
-      });
-    });
+    // ── SEÇÃO 1: Triagem (destino=pendente) ──
+    if (triagem.length) {
+      html += '<div style="margin-top:10px">';
+      html += '<div style="font-size:11px;font-weight:700;color:var(--a);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⏳ Triagem (' + triagem.length + ')</div>';
+      triagem.forEach(function(t) { html += _renderTrocaTriagem(t); });
+      html += '</div>';
+    }
+
+    // ── SEÇÃO 2: Aguardando Fábrica ──
+    if (fabricaAtivas.length) {
+      html += '<div style="margin-top:14px">';
+      html += '<div style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🏭 Fábrica (' + fabricaAtivas.length + ')</div>';
+      fabricaAtivas.forEach(function(t) { html += _renderTrocaFabrica(t); });
+      html += '</div>';
+    }
+
+    // ── SEÇÃO 3: Cliente pendente (fábrica recebeu, falta entregar) ──
+    if (clientePendente.length) {
+      html += '<div style="margin-top:14px">';
+      html += '<div style="font-size:11px;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">✅ Pronto p/ entrega (' + clientePendente.length + ')</div>';
+      clientePendente.forEach(function(t) { html += _renderTrocaEntrega(t); });
+      html += '</div>';
+    }
+
+    // ── SEÇÃO 4: Finalizados (colapsável) ──
+    if (finalizados.length) {
+      html += '<details style="margin-top:14px">';
+      html += '<summary style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;cursor:pointer;margin-bottom:6px">📋 Finalizados (' + finalizados.length + ')</summary>';
+      finalizados.forEach(function(t) { html += _renderTrocaFinalizado(t); });
+      html += '</details>';
+    }
+
+    listaEl.innerHTML = html;
+    _bindTrocaEvents(listaEl);
 
   } catch (e) {
     console.error('Erro carregando trocas:', e);
@@ -3036,77 +3086,278 @@ async function carregarTrocas() {
   }
 }
 
-function _renderTrocaCard(t, cfg, statusAtual) {
-  var validade = t.validade || t.motivo || '';
-  var html = '<div style="background:var(--card);border-radius:var(--rad2);border:1px solid var(--bd);margin-bottom:6px;overflow:hidden" id="troca-' + t.id + '">';
-
-  // === Corpo principal: produto em destaque ===
-  html += '<div style="padding:10px 12px">';
-  // Linha 1: produto + qtd
-  html += '  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">';
-  html += '    <div style="font-weight:700;font-size:14px;line-height:1.3">' + (t.produto || t.sku || '—') + '</div>';
-  html += '    <div style="text-align:right;flex-shrink:0">';
-  html += '      <div style="font-size:18px;font-weight:700;color:' + cfg.cor + '">' + (t.qtd || 0) + '</div>';
-  html += '      <div style="font-size:9px;color:var(--ink4)">unid.</div>';
-  html += '    </div>';
-  html += '  </div>';
-  // Linha 2: validade
-  if (validade) {
-    html += '  <div style="display:inline-block;margin-top:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fef9c3;color:#92400e;border:1px solid #fde68a">📅 Val: ' + validade + '</div>';
-  }
-  // Linha 3: cliente + data (menor)
-  html += '  <div style="font-size:11px;color:var(--ink4);margin-top:4px">' + (t.cliente || '') + (t.data ? ' · ' + t.data : '') + '</div>';
-  if (t.pedido_troca) html += '  <div style="font-size:11px;color:var(--g);margin-top:2px">Pedido troca: #' + t.pedido_troca + '</div>';
-  html += '</div>';
-
-  // === Rodapé com ações ===
-  if (statusAtual === 'pronto') {
-    // Layout especial para "pronto": campo nº pedido em destaque + botões
-    html += '<div style="padding:10px 12px;border-top:1px solid var(--bd);background:var(--g2)">';
-    html += '  <div style="font-size:10px;font-weight:600;color:var(--g);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">Entregar ao cliente</div>';
-    html += '  <div style="margin-bottom:10px">';
-    html += '    <label style="display:block;font-size:11px;font-weight:600;color:var(--ink3);margin-bottom:4px">Nº do pedido de troca</label>';
-    html += '    <input type="text" id="ped-troca-' + t.id + '" placeholder="Ex: 12345" style="display:block;width:100%;font-size:15px;padding:12px 14px;border:2px solid var(--g);border-radius:8px;background:#fff;box-sizing:border-box;outline:none">';
-    html += '  </div>';
-    html += '  <div style="display:flex;align-items:center;gap:10px">';
-    html += '    <button class="troca-sec-btn" data-id="' + t.id + '" data-acao="nao_aprovado" style="font-size:11px;padding:8px 12px;background:transparent;color:var(--r);border:1.5px solid var(--r);border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap">✕ Não aprovado</button>';
-    html += '    <button class="troca-acao-btn" data-id="' + t.id + '" data-proximo="entregue" style="flex:1;font-size:13px;padding:10px 18px;background:var(--g);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap">✓ Entregue</button>';
-    html += '  </div>';
-    html += '</div>';
-  } else if (cfg.acao) {
-    html += '<div style="padding:8px 12px;border-top:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between">';
-    html += '  <button class="btn btn-primary troca-acao-btn" data-id="' + t.id + '" data-proximo="' + cfg.proximo + '" style="font-size:11px;padding:6px 14px;white-space:nowrap">' + cfg.acao + '</button>';
-    if (statusAtual === 'pendente') {
-      html += '  <button class="troca-sec-btn" data-id="' + t.id + '" data-acao="uso_interno" style="font-size:10px;padding:4px 10px;background:var(--b2);color:var(--b);border:1px solid var(--b);border-radius:6px;cursor:pointer;font-weight:600;white-space:nowrap">🏠 Uso Interno</button>';
-    }
-    html += '</div>';
-  }
-
-  html += '</div>';
-  return html;
+// ── Card base (corpo do produto) ──
+function _trocaCardBody(t, corQtd) {
+  var val = t.validade || '';
+  var h = '<div style="padding:10px 12px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">';
+  h += '  <div style="font-weight:700;font-size:14px;line-height:1.3">' + (t.produto || t.sku || '—') + '</div>';
+  h += '  <div style="text-align:right;flex-shrink:0"><div style="font-size:18px;font-weight:700;color:' + corQtd + '">' + (t.qtd || 0) + '</div><div style="font-size:9px;color:var(--ink4)">unid.</div></div>';
+  h += '</div>';
+  if (val) h += '<div style="display:inline-block;margin-top:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fef9c3;color:#92400e;border:1px solid #fde68a">Val: ' + val + '</div>';
+  h += '<div style="font-size:11px;color:var(--ink4);margin-top:4px">' + (t.cliente || '') + (t.data ? ' · ' + t.data : '') + '</div>';
+  if (t.obs) h += '<div style="font-size:10px;color:var(--ink4);margin-top:2px;font-style:italic">' + t.obs + '</div>';
+  h += '</div>';
+  return h;
 }
 
-async function _avancarTroca(id, proximoStatus, btn) {
-  var payload = { id: id, status: proximoStatus, atualizado_por: NOME };
+// ── TRIAGEM CARD ──
+function _renderTrocaTriagem(t) {
+  var h = '<div style="background:var(--card);border-radius:var(--rad2);border:1px solid var(--bd);margin-bottom:6px;overflow:hidden" id="troca-' + t.id + '">';
+  h += _trocaCardBody(t, 'var(--a)');
+  // Footer: triagem — select destino + obs + botões
+  h += '<div style="padding:10px 12px;border-top:1px solid var(--bd);background:var(--a2)">';
+  h += '  <div style="font-size:10px;font-weight:600;color:var(--a);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">Triagem — definir destino</div>';
+  // Select destino
+  h += '  <select id="triagem-dest-' + t.id + '" style="display:block;width:100%;padding:10px;font-size:13px;border:1.5px solid var(--bd);border-radius:8px;background:#fff;margin-bottom:8px;box-sizing:border-box">';
+  h += '    <option value="">Selecione o destino...</option>';
+  h += '    <option value="fabrica">🏭 Enviar para fábrica (troca)</option>';
+  h += '    <option value="problema_barril">⚠️ Problema no barril (solicitar à fábrica)</option>';
+  h += '    <option value="uso_interno">🏠 Uso interno</option>';
+  h += '    <option value="nao_autorizada">✗ Não autorizada</option>';
+  h += '  </select>';
+  // Obs
+  h += '  <textarea id="triagem-obs-' + t.id + '" placeholder="Observação da triagem..." style="display:block;width:100%;padding:8px;font-size:12px;border:1.5px solid var(--bd);border-radius:8px;background:#fff;margin-bottom:8px;resize:none;height:50px;box-sizing:border-box;font-family:inherit"></textarea>';
+  // Pedido (aparece se uso_interno selecionado)
+  h += '  <div id="triagem-ped-wrap-' + t.id + '" style="display:none;margin-bottom:8px">';
+  h += '    <label style="display:block;font-size:11px;font-weight:600;color:var(--ink3);margin-bottom:3px">Nº do pedido de venda (troca)</label>';
+  h += '    <input type="text" id="triagem-ped-' + t.id + '" placeholder="Ex: 12345" style="display:block;width:100%;padding:10px;font-size:13px;border:1.5px solid var(--bd);border-radius:8px;background:#fff;box-sizing:border-box">';
+  h += '  </div>';
+  // Botão confirmar
+  h += '  <button class="troca-triagem-btn" data-id="' + t.id + '" style="width:100%;padding:10px;font-size:13px;font-weight:600;background:var(--a);color:#fff;border:none;border-radius:8px;cursor:pointer">Confirmar triagem</button>';
+  h += '</div>';
+  h += '</div>';
+  return h;
+}
 
-  // Se avançando para "entregue", pegar o nº do pedido
-  if (proximoStatus === 'entregue') {
-    var pedInput = document.getElementById('ped-troca-' + id);
-    var ped = pedInput ? pedInput.value.trim() : '';
-    if (!ped) { toast('Informe o nº do pedido da troca', 'err'); return; }
-    payload.pedido_troca = ped;
+// ── FÁBRICA CARD ──
+function _renderTrocaFabrica(t) {
+  var dst = String(t.destino||'').toLowerCase();
+  var ef = String(t.etapa_fabrica||'').toLowerCase();
+  var sc = String(t.status_cliente||'').toLowerCase();
+  var etapaCfg = TROCA_ETAPA_FABRICA[ef] || TROCA_ETAPA_FABRICA.aguardando_envio;
+  var dstCfg = TROCA_DESTINO[dst] || TROCA_DESTINO.fabrica;
+
+  var h = '<div style="background:var(--card);border-radius:var(--rad2);border:1px solid var(--bd);margin-bottom:6px;overflow:hidden" id="troca-' + t.id + '">';
+  h += _trocaCardBody(t, etapaCfg.cor);
+
+  // Badges: destino + etapa + status cliente
+  h += '<div style="padding:4px 12px;display:flex;flex-wrap:wrap;gap:4px">';
+  h += '  <span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;background:' + dstCfg.bg + ';color:' + dstCfg.cor + '">' + dstCfg.icon + ' ' + dstCfg.label + '</span>';
+  h += '  <span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;background:' + etapaCfg.bg + ';color:' + etapaCfg.cor + '">' + etapaCfg.icon + ' ' + etapaCfg.label + '</span>';
+  if (sc === 'efetuada') {
+    h += '  <span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;background:var(--g2);color:var(--g)">✓ Entregue</span>';
+  } else {
+    h += '  <span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;background:#fef9c3;color:#92400e">Cliente pendente</span>';
+  }
+  h += '</div>';
+
+  if (t.obs_validacao) h += '<div style="padding:2px 12px 6px;font-size:10px;color:var(--ink4);font-style:italic">' + t.obs_validacao + '</div>';
+
+  // Footer: ações
+  h += '<div style="padding:8px 12px;border-top:1px solid var(--bd)">';
+
+  // Ação de avançar etapa fábrica
+  if (etapaCfg.acao) {
+    // Obs para solicitado (obrigatório em problema_barril)
+    if (etapaCfg.proximo === 'solicitado') {
+      h += '<div style="margin-bottom:6px">';
+      h += '  <textarea id="fab-obs-' + t.id + '" placeholder="' + (dst === 'problema_barril' ? 'Como foi solicitado? (email, NF, chamado...) *' : 'Observação (opcional)') + '" style="display:block;width:100%;padding:6px 8px;font-size:11px;border:1.5px solid var(--bd);border-radius:6px;resize:none;height:36px;box-sizing:border-box;font-family:inherit"></textarea>';
+      h += '</div>';
+    }
+    h += '<div style="display:flex;gap:8px;align-items:center">';
+    h += '  <button class="troca-fabrica-btn" data-id="' + t.id + '" data-etapa="' + etapaCfg.proximo + '" data-dst="' + dst + '" style="flex:1;padding:8px;font-size:12px;font-weight:600;background:' + etapaCfg.cor + ';color:#fff;border:none;border-radius:8px;cursor:pointer">' + etapaCfg.acao + '</button>';
+    h += '</div>';
   }
 
-  if (btn) { btn.disabled = true; btn.textContent = '⌛...'; }
+  // Se etapa fábrica = recebido E cliente pendente → botão entregar
+  if (ef === 'recebido' && sc === 'pendente') {
+    h += _trocaEntregaFooter(t);
+  }
+
+  // Ação de efetuar troca cliente (independente da fábrica)
+  if (sc === 'pendente' && ef !== 'recebido') {
+    h += '<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--bd)">';
+    h += '  <details>';
+    h += '    <summary style="font-size:10px;font-weight:600;color:var(--g);cursor:pointer">Entregar ao cliente agora (sem aguardar fábrica)</summary>';
+    h += '    <div style="margin-top:6px">';
+    h += _trocaEntregaFooter(t);
+    h += '    </div>';
+    h += '  </details>';
+    h += '</div>';
+  }
+
+  h += '</div>';
+  h += '</div>';
+  return h;
+}
+
+// ── ENTREGA (pronto para cliente) ──
+function _renderTrocaEntrega(t) {
+  var dst = String(t.destino||'').toLowerCase();
+  var dstCfg = TROCA_DESTINO[dst] || TROCA_DESTINO.fabrica;
+
+  var h = '<div style="background:var(--card);border-radius:var(--rad2);border:1px solid var(--bd);margin-bottom:6px;overflow:hidden" id="troca-' + t.id + '">';
+  h += _trocaCardBody(t, 'var(--g)');
+  // Badges
+  h += '<div style="padding:4px 12px;display:flex;flex-wrap:wrap;gap:4px">';
+  h += '  <span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;background:' + dstCfg.bg + ';color:' + dstCfg.cor + '">' + dstCfg.icon + ' ' + dstCfg.label + '</span>';
+  h += '  <span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;background:var(--g2);color:var(--g)">✅ Fábrica recebido</span>';
+  h += '</div>';
+  // Footer: entrega
+  h += '<div style="padding:10px 12px;border-top:1px solid var(--bd);background:var(--g2)">';
+  h += '  <div style="font-size:10px;font-weight:600;color:var(--g);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">Entregar ao cliente</div>';
+  h += _trocaEntregaFooter(t);
+  h += '</div>';
+  h += '</div>';
+  return h;
+}
+
+// ── Footer reutilizável de entrega ──
+function _trocaEntregaFooter(t) {
+  var h = '';
+  h += '<div style="margin-bottom:8px">';
+  h += '  <label style="display:block;font-size:11px;font-weight:600;color:var(--ink3);margin-bottom:3px">Nº do pedido de troca</label>';
+  h += '  <input type="text" id="ped-troca-' + t.id + '" placeholder="Ex: 12345" style="display:block;width:100%;font-size:14px;padding:10px 12px;border:2px solid var(--g);border-radius:8px;background:#fff;box-sizing:border-box;outline:none">';
+  h += '</div>';
+  h += '<button class="troca-entrega-btn" data-id="' + t.id + '" style="width:100%;padding:10px;font-size:13px;font-weight:600;background:var(--g);color:#fff;border:none;border-radius:8px;cursor:pointer">✓ Entregue ao cliente</button>';
+  return h;
+}
+
+// ── FINALIZADO CARD (compacto) ──
+function _renderTrocaFinalizado(t) {
+  var dst = String(t.destino||'').toLowerCase();
+  var sc = String(t.status_cliente||'').toLowerCase();
+  var dstCfg = TROCA_DESTINO[dst] || TROCA_DESTINO.fabrica;
+
+  var statusLabel = '';
+  if (dst === 'nao_autorizada') statusLabel = '✗ Não autorizada';
+  else if (dst === 'uso_interno') statusLabel = '🏠 Uso interno';
+  else if (sc === 'efetuada') statusLabel = '✓ Entregue';
+  else statusLabel = dst;
+
+  var h = '<div style="background:var(--card);border-radius:var(--rad2);border:1px solid var(--bd);margin-bottom:4px;padding:8px 12px;opacity:0.7">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">';
+  h += '  <div>';
+  h += '    <div style="font-weight:600;font-size:12px">' + (t.produto || t.sku || '—') + ' <span style="color:var(--ink4);font-weight:400">x' + (t.qtd||0) + '</span></div>';
+  h += '    <div style="font-size:10px;color:var(--ink4)">' + (t.cliente||'') + (t.data ? ' · ' + t.data : '') + '</div>';
+  h += '  </div>';
+  h += '  <span style="padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;background:' + dstCfg.bg + ';color:' + dstCfg.cor + ';white-space:nowrap">' + statusLabel + '</span>';
+  h += '</div>';
+  if (t.pedido_troca) h += '<div style="font-size:10px;color:var(--g);margin-top:2px">Pedido: #' + t.pedido_troca + '</div>';
+  h += '</div>';
+  return h;
+}
+
+// ── BIND EVENTOS ──
+function _bindTrocaEvents(container) {
+  // Triagem: toggle pedido field quando destino=uso_interno
+  container.querySelectorAll('[id^="triagem-dest-"]').forEach(function(sel) {
+    var tid = sel.id.replace('triagem-dest-', '');
+    sel.addEventListener('change', function() {
+      var wrap = document.getElementById('triagem-ped-wrap-' + tid);
+      if (wrap) wrap.style.display = sel.value === 'uso_interno' ? 'block' : 'none';
+    });
+  });
+
+  // Triagem: confirmar
+  container.querySelectorAll('.troca-triagem-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { _submitTriagem(btn.dataset.id, btn); });
+  });
+
+  // Fábrica: avançar etapa
+  container.querySelectorAll('.troca-fabrica-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { _submitEtapaFabrica(btn.dataset.id, btn.dataset.etapa, btn.dataset.dst, btn); });
+  });
+
+  // Entrega: efetuar troca cliente
+  container.querySelectorAll('.troca-entrega-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { _submitTrocaCliente(btn.dataset.id, btn); });
+  });
+}
+
+// ── SUBMIT: Triagem ──
+async function _submitTriagem(id, btn) {
+  var destino = (document.getElementById('triagem-dest-' + id) || {}).value;
+  var obs = (document.getElementById('triagem-obs-' + id) || {}).value || '';
+  if (!destino) { toast('Selecione o destino', 'err'); return; }
+  if (!obs.trim()) { toast('Informe uma observação para a triagem', 'err'); return; }
+
+  var payload = { id: id, destino: destino, obs_validacao: obs.trim(), validado_por: NOME };
+
+  if (destino === 'uso_interno') {
+    var ped = (document.getElementById('triagem-ped-' + id) || {}).value || '';
+    if (!ped.trim()) { toast('Informe o nº do pedido de venda', 'err'); return; }
+    payload.pedido_troca = ped.trim();
+  }
+
+  btn.disabled = true; btn.textContent = '⌛ Processando...';
   try {
-    await api('atualizar_status_troca', payload);
+    await api('triagem_troca', payload);
     var card = document.getElementById('troca-' + id);
     if (card) { card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; }
-    var labels = { enviado_fabrica: 'Enviado p/ fábrica', pronto: 'Retornou da fábrica', entregue: 'Entregue ao cliente', nao_aprovado: 'Marcado como não aprovado', uso_interno: 'Convertido em uso interno — estoque atualizado' };
-    toast('✓ ' + (labels[proximoStatus] || proximoStatus), 'ok');
+    var msgs = {
+      fabrica: 'Separado para envio à fábrica',
+      problema_barril: 'Problema no barril registrado',
+      uso_interno: 'Uso interno — estoque atualizado',
+      nao_autorizada: 'Troca não autorizada',
+    };
+    toast('✓ ' + (msgs[destino] || 'Triagem concluída'), 'ok');
     setTimeout(carregarTrocas, 600);
   } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = TROCA_STATUS[proximoStatus]?.acao || 'Avançar'; }
+    btn.disabled = false; btn.textContent = 'Confirmar triagem';
+    toast('Erro: ' + e.message, 'err');
+  }
+}
+
+// ── SUBMIT: Avançar etapa fábrica ──
+async function _submitEtapaFabrica(id, etapa, dst, btn) {
+  var obsEl = document.getElementById('fab-obs-' + id);
+  var obs = obsEl ? obsEl.value.trim() : '';
+
+  // obs obrigatória para problema_barril → solicitado
+  if (etapa === 'solicitado' && dst === 'problema_barril' && !obs) {
+    toast('Informe como foi solicitado à fábrica', 'err');
+    return;
+  }
+
+  var cached = TROCA_CACHE.get(id);
+  var payload = { id: id, etapa_fabrica: etapa, atualizado_por: NOME };
+  if (obs) {
+    payload.obs = obs;
+    payload.obs_anterior = cached ? (cached.obs_validacao || '') : '';
+  }
+
+  btn.disabled = true; btn.textContent = '⌛...';
+  try {
+    await api('avancar_etapa_fabrica', payload);
+    var card = document.getElementById('troca-' + id);
+    if (card) { card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; }
+    var labels = { solicitado: 'Solicitado à fábrica', enviado: 'Enviado para fábrica', recebido: 'Recebido da fábrica' };
+    toast('✓ ' + (labels[etapa] || etapa), 'ok');
+    setTimeout(carregarTrocas, 600);
+  } catch (e) {
+    var cfg = TROCA_ETAPA_FABRICA[etapa];
+    btn.disabled = false; btn.textContent = cfg ? cfg.acao : 'Avançar';
+    toast('Erro: ' + e.message, 'err');
+  }
+}
+
+// ── SUBMIT: Efetuar troca cliente ──
+async function _submitTrocaCliente(id, btn) {
+  var pedInput = document.getElementById('ped-troca-' + id);
+  var ped = pedInput ? pedInput.value.trim() : '';
+  if (!ped) { toast('Informe o nº do pedido da troca', 'err'); return; }
+
+  btn.disabled = true; btn.textContent = '⌛...';
+  try {
+    await api('efetuar_troca_cliente', { id: id, pedido_troca: ped, atualizado_por: NOME });
+    var card = document.getElementById('troca-' + id);
+    if (card) { card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; }
+    toast('✓ Troca efetuada — pedido #' + ped, 'ok');
+    setTimeout(carregarTrocas, 600);
+  } catch (e) {
+    btn.disabled = false; btn.textContent = '✓ Entregue ao cliente';
     toast('Erro: ' + e.message, 'err');
   }
 }
