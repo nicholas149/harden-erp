@@ -485,9 +485,6 @@ if (document.readyState === 'loading') {
       <div class="inner-tab" id="com-tab-trocas" onclick="comercialAba('trocas')">
         🔄 Trocas <span class="tab-badge" id="com-badge-trocas" style="display:none">0</span>
       </div>
-      <div class="inner-tab" id="com-tab-consig" onclick="comercialAba('consig')">
-        📦 Consignados
-      </div>
     </div>
 
     <div class="content" style="padding-top:12px">
@@ -519,31 +516,6 @@ if (document.readyState === 'loading') {
         <div id="lista-trocas"></div>
       </div>
 
-      <!-- Painel Consignados (Devolução) -->
-      <div class="inner-panel" id="com-panel-consig">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div class="slabel" style="margin:0">Devolução de Consignado</div>
-        </div>
-
-        <!-- Busca -->
-        <div id="consig-busca" class="card" style="padding:14px;margin-bottom:12px">
-          <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--tx)">Buscar pedido para devolução</div>
-          <div style="display:flex;gap:8px;margin-bottom:8px">
-            <input type="text" id="consig-pedido" placeholder="Nº do Pedido" style="flex:1;font-size:14px;padding:10px 12px;border:2px solid var(--bd);border-radius:8px;background:var(--bg)">
-            <span style="align-self:center;font-size:11px;color:var(--g);font-weight:600">OU</span>
-          </div>
-          <div class="ac-wrap" style="margin-bottom:10px">
-            <input type="text" id="consig-cliente" placeholder="Nome do cliente..." autocomplete="off" style="width:100%;font-size:14px;padding:10px 12px;border:2px solid var(--bd);border-radius:8px;background:var(--bg);box-sizing:border-box">
-          </div>
-          <button class="btn btn-primary" onclick="buscarConsignado()" style="width:100%;padding:12px;font-size:14px;border-radius:8px">🔍 Buscar</button>
-        </div>
-
-        <!-- Resultado: lista de pedidos (busca por cliente) -->
-        <div id="consig-pedidos" style="display:none"></div>
-
-        <!-- Resultado: detalhe do pedido (itens) -->
-        <div id="consig-detalhe" style="display:none"></div>
-      </div>
 
     </div>
   </div>
@@ -787,12 +759,11 @@ function _ativarPapel(papel, nome) {
 }
 
 function comercialAba(aba) {
-  ['dist','pdv','trocas','consig'].forEach(function(t) {
+  ['dist','pdv','trocas'].forEach(function(t) {
     document.getElementById('com-tab-'+t).classList.toggle('active', aba === t);
     document.getElementById('com-panel-'+t).classList.toggle('active', aba === t);
   });
   if (aba === 'trocas') carregarTrocas();
-  if (aba === 'consig') initConsigAC();
 }
 
 function patioAba(aba) {
@@ -3347,16 +3318,27 @@ async function _submitConsigInline(cid, itens, grupo, produtosConsig, btn) {
 
     if (btn) btn.textContent = '⌛ Validando registros...';
 
-    // 2. Validar todos os registros pendentes do grupo (barris + produtos)
-    //    Apenas muda status para 'validado' — estoque já foi registrado pelo motorista/pátio
+    // 2. Validar SOMENTE os registros cujo SKU corresponde aos itens devolvidos
+    //    Os demais permanecem pendentes para serem vinculados a outros pedidos
+    const skusDevolvidos = new Set(itensDevolver.map(it => (it.sku || '').trim().toUpperCase()));
+
     let confirmados = 0;
     for (const reg of grupo.registros) {
       const isRet = reg.qtd !== undefined && reg.qtd_entrada === undefined;
       const aba = isRet ? 'retornaveis' : 'estoque';
+      const regSku = String(reg.sku || reg.produto || '').trim().toUpperCase();
+
+      // Verificar se este registro é um dos itens devolvidos
+      // Para Estoque: SKU deve bater com o SKU do item devolvido
+      // Para Retornáveis vinculados (barril via _ret_id): validar junto com o estoque correspondente
+      const deveValidar = skusDevolvidos.has(regSku);
+
+      if (!deveValidar) continue;
+
       try {
         await api('validar_pendencia', { id: reg.id, aba, status: 'validado', validado_por: NOME });
         confirmados++;
-        // Se tem retornável vinculado (deduplicado por op_id), validar também
+        // Se tem retornável vinculado (barril deduplicado por op_id), validar também
         if (reg._ret_id) {
           await api('validar_pendencia', { id: reg._ret_id, aba: 'retornaveis', status: 'validado', validado_por: NOME });
           confirmados++;
@@ -3378,10 +3360,8 @@ async function _submitConsigInline(cid, itens, grupo, produtosConsig, btn) {
     }
     toast('✓ ' + msg, 'ok');
 
-    // Remover o card inteiro após 1.5s
+    // Atualizar o card (recarregar pendências para refletir os itens restantes)
     setTimeout(function () {
-      const card = document.getElementById(cid)?.closest('.pend-card');
-      if (card) card.remove();
       carregarPendencias('comercial');
     }, 1500);
 
