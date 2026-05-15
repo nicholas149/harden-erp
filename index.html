@@ -513,7 +513,25 @@ if (document.readyState === 'loading') {
           <span onclick="carregarTrocas()" style="font-size:11px;color:var(--g);cursor:pointer;font-weight:500">↻ Atualizar</span>
         </div>
         <div id="dash-trocas" style="margin-bottom:10px"></div>
-        <div id="lista-trocas"></div>
+        <!-- Sub-abas internas das trocas -->
+        <div class="inner-tabs" style="margin-bottom:8px">
+          <div class="inner-tab active" id="troca-tab-triagem" onclick="trocaSubAba('triagem')">
+            Triagem <span class="tab-badge" id="troca-badge-triagem" style="display:none">0</span>
+          </div>
+          <div class="inner-tab" id="troca-tab-fabrica" onclick="trocaSubAba('fabrica')">
+            Fábrica <span class="tab-badge" id="troca-badge-fabrica" style="display:none">0</span>
+          </div>
+          <div class="inner-tab" id="troca-tab-entrega" onclick="trocaSubAba('entrega')">
+            Entrega <span class="tab-badge" id="troca-badge-entrega" style="display:none">0</span>
+          </div>
+          <div class="inner-tab" id="troca-tab-final" onclick="trocaSubAba('final')">
+            Finalizados <span class="tab-badge" id="troca-badge-final" style="display:none">0</span>
+          </div>
+        </div>
+        <div class="inner-panel active" id="troca-panel-triagem"></div>
+        <div class="inner-panel" id="troca-panel-fabrica"></div>
+        <div class="inner-panel" id="troca-panel-entrega"></div>
+        <div class="inner-panel" id="troca-panel-final"></div>
       </div>
 
 
@@ -764,6 +782,13 @@ function comercialAba(aba) {
     document.getElementById('com-panel-'+t).classList.toggle('active', aba === t);
   });
   if (aba === 'trocas') carregarTrocas();
+}
+
+function trocaSubAba(aba) {
+  ['triagem','fabrica','entrega','final'].forEach(function(t) {
+    document.getElementById('troca-tab-'+t).classList.toggle('active', aba === t);
+    document.getElementById('troca-panel-'+t).classList.toggle('active', aba === t);
+  });
 }
 
 function patioAba(aba) {
@@ -2961,8 +2986,8 @@ async function carregarTrocas() {
     if (dashEl) {
       var dh = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">';
       var dashItems = [
-        { k: 'triagem',     label: 'Triagem',    cor: 'var(--a)',  bg: 'var(--a2)' },
-        { k: '_fabrica',    label: 'Fábrica',     cor: '#7c3aed',   bg: '#f3e8ff' },
+        { k: 'triagem',     label: 'Triagem',       cor: 'var(--a)',  bg: 'var(--a2)' },
+        { k: '_fabrica',    label: 'Fábrica',        cor: '#7c3aed',   bg: '#f3e8ff' },
         { k: 'cliente_pendente', label: 'Cliente pend.', cor: 'var(--b)', bg: 'var(--b2)' },
       ];
       var fabTotal = (dash.fabrica_aguardando||0) + (dash.fabrica_solicitado||0) + (dash.fabrica_enviado||0);
@@ -2973,7 +2998,6 @@ async function carregarTrocas() {
           '<div style="font-size:9px;font-weight:600;color:var(--ink3);text-transform:uppercase">'+di.label+'</div></div>';
       });
       dh += '</div>';
-      // Linha secundária: recebido, efetuada, uso_interno, nao_autorizada
       var sec = [
         { k: 'fabrica_recebido', label: 'Recebido',    cor: 'var(--g)', bg: 'var(--g2)' },
         { k: 'cliente_efetuada', label: 'Efetuada',     cor: 'var(--g)', bg: 'var(--g2)' },
@@ -2995,21 +3019,12 @@ async function carregarTrocas() {
       dashEl.innerHTML = dh;
     }
 
-    // ── Lista de trocas ──
-    const listaEl = document.getElementById('lista-trocas');
-    if (!listaEl) return;
-
-    // Só exibir se estoque vinculado já validado
-    const todas = trocas.filter(function(t) {
-      if (String(t.status_estoque||'').toLowerCase() !== 'validado') return false;
-      return true;
+    // ── Separar trocas por seção ──
+    var todas = trocas.filter(function(t) {
+      return String(t.status_estoque||'').toLowerCase() === 'validado';
     });
 
-    // Separar por seção
-    var triagem = [];
-    var fabricaAtivas = [];
-    var clientePendente = [];
-    var finalizados = [];
+    var triagem = [], fabricaAtivas = [], clientePendente = [], finalizados = [];
 
     todas.forEach(function(t) {
       var dst = String(t.destino||'').toLowerCase();
@@ -3021,69 +3036,85 @@ async function carregarTrocas() {
       if (dst === 'nao_autorizada') { finalizados.push(t); return; }
       if (dst === 'uso_interno') { finalizados.push(t); return; }
 
-      // fábrica ou problema_barril
       if (ef && ef !== 'recebido') { fabricaAtivas.push(t); }
       else if (ef === 'recebido' && sc === 'efetuada') { finalizados.push(t); }
       else if (ef === 'recebido') { clientePendente.push(t); }
       else { fabricaAtivas.push(t); }
-
-      // cliente pendente (sem fábrica recebida, mas com destino definido)
-      if (sc === 'pendente' && dst !== 'pendente' && dst !== 'nao_autorizada' && ef !== 'recebido') {
-        // já está em fabricaAtivas, mostrará badge de cliente pendente
-      }
     });
 
-    // Badge = triagem + fábrica ativas + cliente pendente
+    // ── Badge geral (na aba Trocas do comercial) ──
     var badgeCount = triagem.length + fabricaAtivas.length + clientePendente.length;
-    const badge = document.getElementById('com-badge-trocas');
+    var badge = document.getElementById('com-badge-trocas');
     if (badge) { badge.textContent = badgeCount; badge.style.display = badgeCount > 0 ? '' : 'none'; }
 
-    if (!badgeCount && !finalizados.length) {
-      listaEl.innerHTML = '<div class="empty"><div class="empty-icon">🔄</div><div class="empty-txt">Nenhuma troca registrada</div></div>';
-      return;
+    // ── Badges das sub-abas ──
+    _setTrocaBadge('triagem', triagem.length);
+    _setTrocaBadge('fabrica', fabricaAtivas.length);
+    _setTrocaBadge('entrega', clientePendente.length);
+    _setTrocaBadge('final', finalizados.length);
+
+    // ── Renderizar cada painel ──
+    var panelTriagem = document.getElementById('troca-panel-triagem');
+    var panelFabrica = document.getElementById('troca-panel-fabrica');
+    var panelEntrega = document.getElementById('troca-panel-entrega');
+    var panelFinal   = document.getElementById('troca-panel-final');
+
+    // Triagem
+    if (panelTriagem) {
+      if (!triagem.length) {
+        panelTriagem.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div><div class="empty-txt">Nenhuma troca aguardando triagem</div></div>';
+      } else {
+        var h = '';
+        triagem.forEach(function(t) { h += _renderTrocaTriagem(t); });
+        panelTriagem.innerHTML = h;
+        _bindTrocaEvents(panelTriagem);
+      }
     }
 
-    var html = '';
-
-    // ── SEÇÃO 1: Triagem (destino=pendente) ──
-    if (triagem.length) {
-      html += '<div style="margin-top:10px">';
-      html += '<div style="font-size:11px;font-weight:700;color:var(--a);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⏳ Triagem (' + triagem.length + ')</div>';
-      triagem.forEach(function(t) { html += _renderTrocaTriagem(t); });
-      html += '</div>';
+    // Fábrica
+    if (panelFabrica) {
+      if (!fabricaAtivas.length) {
+        panelFabrica.innerHTML = '<div class="empty"><div class="empty-icon">🏭</div><div class="empty-txt">Nenhuma troca em processo de fábrica</div></div>';
+      } else {
+        var h = '';
+        fabricaAtivas.forEach(function(t) { h += _renderTrocaFabrica(t); });
+        panelFabrica.innerHTML = h;
+        _bindTrocaEvents(panelFabrica);
+      }
     }
 
-    // ── SEÇÃO 2: Aguardando Fábrica ──
-    if (fabricaAtivas.length) {
-      html += '<div style="margin-top:14px">';
-      html += '<div style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🏭 Fábrica (' + fabricaAtivas.length + ')</div>';
-      fabricaAtivas.forEach(function(t) { html += _renderTrocaFabrica(t); });
-      html += '</div>';
+    // Entrega
+    if (panelEntrega) {
+      if (!clientePendente.length) {
+        panelEntrega.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div class="empty-txt">Nenhuma troca pronta para entrega</div></div>';
+      } else {
+        var h = '';
+        clientePendente.forEach(function(t) { h += _renderTrocaEntrega(t); });
+        panelEntrega.innerHTML = h;
+        _bindTrocaEvents(panelEntrega);
+      }
     }
 
-    // ── SEÇÃO 3: Cliente pendente (fábrica recebeu, falta entregar) ──
-    if (clientePendente.length) {
-      html += '<div style="margin-top:14px">';
-      html += '<div style="font-size:11px;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">✅ Pronto p/ entrega (' + clientePendente.length + ')</div>';
-      clientePendente.forEach(function(t) { html += _renderTrocaEntrega(t); });
-      html += '</div>';
+    // Finalizados
+    if (panelFinal) {
+      if (!finalizados.length) {
+        panelFinal.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-txt">Nenhuma troca finalizada</div></div>';
+      } else {
+        var h = '';
+        finalizados.forEach(function(t) { h += _renderTrocaFinalizado(t); });
+        panelFinal.innerHTML = h;
+      }
     }
-
-    // ── SEÇÃO 4: Finalizados (colapsável) ──
-    if (finalizados.length) {
-      html += '<details style="margin-top:14px">';
-      html += '<summary style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;cursor:pointer;margin-bottom:6px">📋 Finalizados (' + finalizados.length + ')</summary>';
-      finalizados.forEach(function(t) { html += _renderTrocaFinalizado(t); });
-      html += '</details>';
-    }
-
-    listaEl.innerHTML = html;
-    _bindTrocaEvents(listaEl);
 
   } catch (e) {
     console.error('Erro carregando trocas:', e);
     toast('Erro ao carregar trocas: ' + e.message, 'err');
   }
+}
+
+function _setTrocaBadge(key, count) {
+  var el = document.getElementById('troca-badge-' + key);
+  if (el) { el.textContent = count; el.style.display = count > 0 ? '' : 'none'; }
 }
 
 // ── Card base (corpo do produto) ──
